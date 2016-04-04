@@ -10,15 +10,18 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include "../const.h"
+
 #define MAIN_SERVER_IP "129.170.213.101"
 #define MAIN_SERVER_PORT "47789"
-
+#define true 1
+#define false 0
+#define ERROR  -1
+#define OK 1
 
 const char REQUEST_WATER_TEMP = 1;
 const char REQUEST_REACTOR_TEMP = 2;
 const char REQUEST_POWER_LEVEL = 3;
 
-void showErrorAndExit(char *msg);
 void displayMenu();
 int getIntInput();
 void resetDataServerParams();
@@ -28,3 +31,6 @@ void requestData(char* queryParam);
 int doDataRequest();
 int clearScreen(int shouldWaitToFinish);
 void callEnterToContinue(void);
+void getUserInput(void);
+void allocMemory();
+void deAllocMemory();

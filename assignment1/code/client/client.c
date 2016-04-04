@@ -1,6 +1,6 @@
 #include "client.h"
 
-
+#define CAPTION_LEN 128
 int input = 0;
 char readBuffer[256];
 char writeBuffer[256];
@@ -21,12 +21,14 @@ char* CLOSE = "CLOSE";
 char* WATER = "WATER TEMPERATURE";
 char* REACTOR = "REACTOR TEMPERATURE";
 char* POWER = "POWER LEVEL";
+char* tokenPointer;
 
 
 char* startMessage = "AUTH secretpassword\n";
 char dataServerUrl[256] ;
 char dataServerAuth[256] ;
 char dataServerPortString[256] ;
+char* caption;
 
 int mainServerSocketD ;
 struct sockaddr_in mainServerAdd;
@@ -37,26 +39,59 @@ int dataServerSocketD;
 struct sockaddr_in dataServerAdd;
 struct hostent *dataServer;
 int dataServerPort;
+int isConnected = false;
 
 // convert port no in string to integer
 
 int main(int argc, char *argv[]){
+    allocMemory();
     displayMenu();
-    input = getIntInput();
-    while( input < 4){
-        //printf("Input = %d \n" , input );
-        if(doAuthRequest() != ERROR){
-        //printf("Input = %d \n" , input );
-            doDataRequest();
-        }else{
-            printf("Auth Error from server\n");
+    while(1){
+        bzero(caption,CAPTION_LEN);
+        getUserInput();
+        printf("User input is %s\n", caption);
+        char* token ;
+        token = strtok_r(caption, " ",&tokenPointer);
+        while(token!=NULL){
+            printf("Token =  %s\n", token);
+            input = atoi(token);
+            if( input <=4){
+                //printf("Input = %d \n" , input );
+                if(input == 4){
+                    printf("Exit menu selected\n");
+                    exit(0);
+                }
+                if(doAuthRequest() != ERROR){
+                //printf("Input = %d \n" , input );
+                    doDataRequest();
+                }else{
+                    printf("Auth Error from server\n");
+                }             
+            }else{
+                printf("Invalid Input ***\n");
+            }
+
+            token = strtok_r(NULL, " ",&tokenPointer);
+            sleep(1);
         }
-        callEnterToContinue();
-        clearScreen(1);
+        //clearScreen(1);
+        callEnterToContinue();   
         displayMenu();
-        input = getIntInput();
-    }   
+    }
+    deAllocMemory();
     return 0;    
+}
+/**
+* allocate memory
+*/
+void allocMemory(){
+    caption = (char *)malloc(CAPTION_LEN);
+}
+/**
+* free memory
+*/
+void deAllocMemory(){
+    free(caption);
 }
 
 /**
@@ -65,7 +100,9 @@ int main(int argc, char *argv[]){
 void displayMenu(){
     printf("\n\nWhich sensor data would you like to read:\n\n\t(1) Water temperature \n\t(2) Reactor temperature \n\t(3) Power level \n\t(4) Exit ! \n\n\nSelection:");
 }
-
+void getUserInput(){
+    input_string("",caption,CAPTION_LEN);
+}
 int getIntInput(){
     int newInput;
     scanf("%d", &newInput);
@@ -178,8 +215,9 @@ void requestData(char* queryParam){
         dataServerAdd.sin_port = htons(dataServerPort); // changin the byte order to network order
         //2. Connect to predfined server traced from WireShark       
         if(connect(dataServerSocketD,(struct sockaddr *)&dataServerAdd,sizeof(dataServerAdd)) < 0){
-            printf("Water temp connection failed to %s",dataServerUrl); 
+            printf("Water temp connection failed to %s\n",dataServerUrl); 
             showErrorAndExit("ERROR connecting to server");
+            return;
          }
          //printf("water temp server connected %s\n" , dataServerUrl);
          bzero(writeBuffer,256);
@@ -220,9 +258,9 @@ void requestData(char* queryParam){
          }else{
             printf("No data recieve from server\n");
          }
-         if (close(mainServerSocketD) < 0){ // finally call close()
-              printf("Socket not closed");
-         }
+         // if (close(dataServerSocketD) < 0){ // finally call close()
+         //      printf("Socket not closed");
+         // }
     
 }
 

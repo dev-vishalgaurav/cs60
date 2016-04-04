@@ -1,0 +1,17 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
+#include<string.h>
+#include<unistd.h>
+#include<time.h>
+
+void showErrorAndExit(char *msg);
+void displayMenu();
+int getIntInput();
+void resetDataServerParams();
+int doAuthRequest();
+void displayResult(char* queryParam);
+void requestData(char* queryParam);

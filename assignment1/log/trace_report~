@@ -1,0 +1,10 @@
+AUTH secretpassword (47789)
+CONNECT threemileisland.cs.dartmouth.edu 48343 networks
+AUTH networks
+SUCCESS
+WATER TEMPERATURE
+1459385146 173 F
+CLOSE
+BYE
+
+129.170.213.101

@@ -10,5 +10,11 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include "../const.h"
-#define MAIN_SERVER_IP "129.170.213.101"
-#define MAIN_SERVER_PORT "47789"
+
+
+
+void talkToClient(int clientSocketId);
+int getRandomTemperature();
+int getRandomPower();
+int getRandomReactor();
+

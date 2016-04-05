@@ -11,16 +11,6 @@ char resultUnit[256];
 
 int totalWrite;
 int totalRead;
-char* AUTH = "AUTH";
-char* PASSWORD = "secretpassword";
-char* NEW_LINE = "\n";
-char* SPACE = " ";
-char* SUCCESS = "SUCCESS\n";
-char* CONNECT = "CONNECT";
-char* CLOSE = "CLOSE";
-char* WATER = "WATER TEMPERATURE";
-char* REACTOR = "REACTOR TEMPERATURE";
-char* POWER = "POWER LEVEL";
 char* tokenPointer;
 
 
@@ -238,10 +228,7 @@ void requestData(char* queryParam){
             /* first check if success then walk through other tokens */
             if(strcmp(token,SUCCESS) == 0){ // request was successful according to wireshark
                 //printf( "Water temp Authorized \n");
-                bzero(writeBuffer,256);
-                strcat(writeBuffer,queryParam);
-                strcat(writeBuffer,NEW_LINE);
-                totalWrite = write(dataServerSocketD,writeBuffer,strlen(writeBuffer));
+                totalWrite = write(dataServerSocketD,queryParam,strlen(writeBuffer));
                 bzero(readBuffer,256);
                 totalRead = read(dataServerSocketD,readBuffer,255);
                 //printf("%s\n",readBuffer);

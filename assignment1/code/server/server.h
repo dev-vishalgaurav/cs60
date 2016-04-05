@@ -10,6 +10,5 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include "../const.h"
-#define SERVER_PORT "47789"
-#define DATA_SERVER_PORT "47789"
+
 

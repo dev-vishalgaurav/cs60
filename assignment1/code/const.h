@@ -25,6 +25,7 @@
 #define UNIT_MW  "MW"
 #define UNIT_F  "F"
 #define MAX_CLIENTS 5
+#define DATA_SERVER_ADDRESS "localhost"
 
 void showErrorAndExit(char *msg);
 int input_string(char *message, char *buffer, int len);

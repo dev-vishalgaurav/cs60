@@ -39,11 +39,11 @@ int main(int argc, char *argv[]){
     while(1){
         bzero(caption,CAPTION_LEN);
         getUserInput();
-        printf("User input is %s\n", caption);
+        // printf("User input is %s\n", caption);
         char* token ;
         token = strtok_r(caption, " ",&tokenPointer);
         while(token!=NULL){
-            printf("Token =  %s\n", token);
+            // printf("Token =  %s\n", token);
             input = atoi(token);
             if( input <=4){
                 //printf("Input = %d \n" , input );
@@ -62,7 +62,6 @@ int main(int argc, char *argv[]){
             }
 
             token = strtok_r(NULL, " ",&tokenPointer);
-            sleep(1);
         }
         //clearScreen(1);
         callEnterToContinue();   
@@ -88,7 +87,7 @@ void deAllocMemory(){
 * this method will display the menu to be shown to user for his input
 */
 void displayMenu(){
-    printf("\n\nWhich sensor data would you like to read:\n\n\t(1) Water temperature \n\t(2) Reactor temperature \n\t(3) Power level \n\t(4) Exit ! \n\n\nSelection:");
+    printf("\n\tWELCOME TO THE THREE MILE ISLAND SENSOR NETWORK\n\n\n\tWhich sensor data would you like to read:\n\n\t\t(1) Water temperature \n\t\t(2) Reactor temperature \n\t\t(3) Power level \n\t\t(4) Exit ! \n\n\n\tSelection: ");
 }
 void getUserInput(){
     input_string("",caption,CAPTION_LEN);
@@ -261,6 +260,7 @@ int doDataRequest(){
     }else if(input == REQUEST_POWER_LEVEL ){
         requestData(POWER);
     }
+    sleep(1);
     printf("\n");
 }
 /*

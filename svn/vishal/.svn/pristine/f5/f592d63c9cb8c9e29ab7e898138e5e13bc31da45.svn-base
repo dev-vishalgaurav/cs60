@@ -1,0 +1,63 @@
+╭─skyspeech@skyspeech ~/coding/courses/cs60/assignment1/code master ✘ [13:30:53]
+╰─➤ ./assignment1_client 
+
+	WELCOME TO THE THREE MILE ISLAND SENSOR NETWORK
+
+
+	Which sensor data would you like to read:
+
+		(1) Water temperature 
+		(2) Reactor temperature 
+		(3) Power level 
+		(4) Exit ! 
+
+
+	Selection: : 1 2 3
+The last WATER TEMPERATURE was taken Wed Apr  6 13:31:12 2016 and was 233 F
+
+
+The last REACTOR TEMPERATURE was taken Wed Apr  6 13:31:13 2016 and was 1196 F
+
+
+The last POWER LEVEL was taken Wed Apr  6 13:31:14 2016 and was 446 MW
+
+
+Please press enter to continue : 
+
+
+	WELCOME TO THE THREE MILE ISLAND SENSOR NETWORK
+
+
+	Which sensor data would you like to read:
+
+		(1) Water temperature 
+		(2) Reactor temperature 
+		(3) Power level 
+		(4) Exit ! 
+
+
+	Selection: : 1 2 3
+The last WATER TEMPERATURE was taken Wed Apr  6 13:31:20 2016 and was 194 F
+
+
+The last REACTOR TEMPERATURE was taken Wed Apr  6 13:31:21 2016 and was 1182 F
+
+
+The last POWER LEVEL was taken Wed Apr  6 13:31:22 2016 and was 417 MW
+
+
+Please press enter to continue : 
+
+
+	WELCOME TO THE THREE MILE ISLAND SENSOR NETWORK
+
+
+	Which sensor data would you like to read:
+
+		(1) Water temperature 
+		(2) Reactor temperature 
+		(3) Power level 
+		(4) Exit ! 
+
+
+	Selection: : 

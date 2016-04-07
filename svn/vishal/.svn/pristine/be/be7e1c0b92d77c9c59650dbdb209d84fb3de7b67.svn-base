@@ -1,0 +1,26 @@
+1. Open terminal and go to code directory.
+2. type make and press enter
+3. it will generate 3 executables assignment1_client, assignment1_server, assignment1_server_data
+4. assignment1_client will work as required by assignemnt.
+5. to communicate with assignment1_server & assignment1_server_data you need to telnet to (localhost 55123)  for main server and (localhost 55512) to communicate with data server. 
+
+	a. run assignment1_server_data  assignment1_server on 2 different terminals. 
+	b. from a new terminal use telnet to communicate with these servers as shown below.
+
+		for ex : 
+			<For main server>
+			telent localhost 55123
+			AUTH secretpassword
+			CONNECT localhost 55512 networks
+
+			<For data server>
+			telent localhost 55512
+			AUTH netwroks
+			SUCCESS
+			WATER TEMPERATURE
+			1459385146 173 F
+			CLOSE
+			BYE
+
+
+Note each executable should be run in a separate terminal.

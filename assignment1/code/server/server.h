@@ -11,4 +11,3 @@
 #include <sys/stat.h>
 #include "../const.h"
 void talkToClient(int clientSocketId);
-

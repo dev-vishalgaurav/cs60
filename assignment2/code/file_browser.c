@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #define LISTENQ  1024  // second argument to listen()
 #define MAXLINE 1024   // max length of a line
@@ -84,21 +85,57 @@ int serverSocketFd;
 // working directory
 char *workingDirectory;
 
-void appedFilesHtmlFromDir(char *buffer){
+// utility function to get the format size
+void format_size(char* buf, struct stat *stat){
+    if(S_ISDIR(stat->st_mode)){
+        sprintf(buf, "%s", "[DIR]");
+    } else {
+        off_t size = stat->st_size;
+        if(size < 1024){
+            sprintf(buf, "%lu", size);
+        } else if (size < 1024 * 1024){
+            sprintf(buf, "%.1fK", (double)size / 1024);
+        } else if (size < 1024 * 1024 * 1024){
+            sprintf(buf, "%.1fM", (double)size / 1024 / 1024);
+        } else {
+            sprintf(buf, "%.1fG", (double)size / 1024 / 1024 / 1024);
+        }
+    }
+}
+
+
+void appedFilesHtmlFromDir(int dirFd, char *fileName, char *buffer){
     DIR *dir ;
     struct dirent *ent;
-    if ((dir = opendir (workingDirectory)) != NULL) {
-        char temp[MAXLINE] ;
+    if ((dir = opendir (fileName)) != NULL) {
+      char temp[MAXLINE] ;
+      struct stat sbuf;
+      int ffd = 0;
+      printf("appedFilesHtmlFromDir :- %s\n",fileName);
       /* print all the files and directories within directory */
       while ((ent = readdir (dir)) != NULL) {
-        bzero(temp,strlen(temp));
-        sprintf (temp,"<tr><td><a href=\"%s\">%s</a></td><td>2016-04-05 01:14</td><td>16</td></tr>",ent->d_name,ent->d_name);
-        strcat(buffer,temp);
+        char resultTime[30];
+        char childFileName[256];
+        sprintf(childFileName,"%s%s",fileName,ent->d_name); // append directory with files
+        ffd = open(childFileName, O_RDONLY, 0);
+        fstat(ffd, &sbuf);
+        time_t time = sbuf.st_atime ;
+        strftime(resultTime,30,"%Y-%m-%d %H:%M:%S", localtime(&time));
+        printf("FILE = %s\n", childFileName );
+        if(S_ISREG(sbuf.st_mode)){
+            bzero(temp,strlen(temp));
+            char fileSizeFormat[45];
+            format_size(fileSizeFormat,&sbuf);
+            sprintf (temp,"<tr><td><a href=\"%s\">%s</a></td><td>%s</td><td>%s</td></tr>",ent->d_name,ent->d_name,resultTime,fileSizeFormat);
+            strcat(buffer,temp);
+        }else{
+            printf("Not a file\n");
+        }
       }
       closedir(dir);
     } else {
       /* could not open directory */
-      perror ("");
+      printf ("Could not open directory :- %s ", fileName);
       return ;
     }  
 }
@@ -190,23 +227,7 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen){
     return n;
 }
 
-// utility function to get the format size
-void format_size(char* buf, struct stat *stat){
-    if(S_ISDIR(stat->st_mode)){
-        sprintf(buf, "%s", "[DIR]");
-    } else {
-        off_t size = stat->st_size;
-        if(size < 1024){
-            sprintf(buf, "%lu", size);
-        } else if (size < 1024 * 1024){
-            sprintf(buf, "%.1fK", (double)size / 1024);
-        } else if (size < 1024 * 1024 * 1024){
-            sprintf(buf, "%.1fM", (double)size / 1024 / 1024);
-        } else {
-            sprintf(buf, "%.1fG", (double)size / 1024 / 1024 / 1024);
-        }
-    }
-}
+
 
 // pre-process files in the "home" directory and send the list to the client
 void handle_directory_request(int out_fd, int dir_fd, char *filename){
@@ -219,12 +240,12 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename){
     strcat(buffer,"HTTP/1.0 200 OK\n\n");
     int n = write(out_fd,buffer,strlen(buffer));
     printf("written %s \n total = %d \n",buffer,n );
-    //bzero(buffer,MAXLINE);
-    //strcat(buffer,"Content-type: text/html\r\n");
-    //n = written(out_fd,buffer,strlen(buffer));
+    // bzero(buffer,MAXLINE);
+    // strcat(buffer,"Content-type:text/html\r\n");
+    // n = written(out_fd,buffer,strlen(buffer));
     bzero(buffer,MAXLINE);
     strcat(buffer,"<html><head><style>body{font-family: monospace; font-size: 13px;}td {padding: 1.5px 6px;}</style></head><body><table>");
-    appedFilesHtmlFromDir(buffer);
+    appedFilesHtmlFromDir(dir_fd,filename,buffer);
     printf("%s\n",buffer);
     // get file directory
     
@@ -239,7 +260,6 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename){
     }else{
         printf("Error in writting to buffer\n");
     }
-    //close(out_fd);
 }
 
 // utility function to get the MIME (Multipurpose Internet Mail Extensions) type
@@ -301,10 +321,23 @@ void parse_request(int clientSocketId, http_request *req){
     size_t end;
   } http_request;
     */
+    rio_t rio ;
+    rio_readinitb(&rio,clientSocketId); 
     char buffer[MAXLINE] ;
-    int n = 1;
-    n = read(clientSocketId,buffer,MAXLINE);
-    printf("buffer is :- %s\n",buffer);
+    int totalRead = rio_readlineb(&rio,buffer,MAXLINE);
+    char *token;
+    if(totalRead > 0 && strstr(buffer,"GET") != NULL){
+        printf("buffer is :- %s\n",buffer);
+        /*GET / HTTP/1.1 */
+        token = strtok(buffer," ");
+        // GET 
+        token = strtok(NULL," ");
+        bzero(req->filename,MAXLINE);
+        strcat(req->filename,workingDirectory);
+        strcat(req->filename,token);
+        printf("File name is %s\n",req->filename );
+        // GET request success
+    }
     printf("reading done :- \n");
     // Rio (Robust I/O) Buffered Input Functions
     
@@ -327,12 +360,15 @@ void client_error(int fd, int status, char *msg, char *longmsg){
 }
 
 // serve static content
-void serve_static(int out_fd, int in_fd, http_request *req,
-                  size_t total_size){
-    
+void serve_static(int out_fd, int in_fd, http_request *req, size_t total_size){
     // send response headers to client e.g., "HTTP/1.1 200 OK\r\n"
-    
-    // send response body to client
+    printf("serve_static request size = %d \n", (int)total_size);
+    char *srcp ;
+    char *success = "HTTP/1.0 200 OK\n\n" ;
+    int n = written(out_fd,success,strlen(success));
+    srcp = mmap(0, total_size, PROT_READ, MAP_PRIVATE, in_fd, 0);
+    written(out_fd, srcp, total_size); 
+    munmap(srcp, total_size); 
 }
 
 // handle one HTTP request/response transaction
@@ -340,29 +376,30 @@ void process(int clientSocketId, struct sockaddr_in *clientaddr){
     printf("accept request, clientSocketId is %d, pid is %d\n", clientSocketId, getpid());
     http_request req;
     parse_request(clientSocketId, &req);
-    handle_directory_request(clientSocketId,0,"nothing");
-    /*struct stat sbuf;
+    struct stat sbuf;
     int status = 200; //server status init as 200
     int ffd = open(req.filename, O_RDONLY, 0);
     if(ffd <= 0){
         // detect 404 error and print error log
-        
+        printf("detect 404 error and print error log\n");
     } else {
         // get descriptor status
         fstat(ffd, &sbuf);
         if(S_ISREG(sbuf.st_mode)){
+            printf("is FILE = %s \n", req.filename );
+            serve_static(clientSocketId,ffd,&req,sbuf.st_size);
             // server serves static content
             
         } else if(S_ISDIR(sbuf.st_mode)){
+            printf("is DIR = %s \n", req.filename );
             // server handle directory request
+            handle_directory_request(clientSocketId,ffd, req.filename);
 
         } else {
-            // detect 400 error and print error log
-
+            printf("detect 404 error and print error log\n");
         }
         close(ffd);
     }
-    */
     
     // print log/status on the terminal
     //log_access(status, clientaddr, &req);

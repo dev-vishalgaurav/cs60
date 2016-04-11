@@ -32,7 +32,8 @@
 #define false 0
 #define ERROR  -1
 #define OK 1
- #define MAX_CLIENTS 9999
+#define MAX_CLIENTS 9999
+#define RESPONSE_HEADER_SUCCESS "HTTP/1.1 200 OK\r\n"
 
 typedef struct {
     int rio_fd;                 // descriptor for this buf
@@ -82,6 +83,25 @@ int serverSocketFd;
 
 // working directory
 char *workingDirectory;
+
+void appedFilesHtmlFromDir(char *buffer){
+    DIR *dir ;
+    struct dirent *ent;
+    if ((dir = opendir (workingDirectory)) != NULL) {
+        char temp[MAXLINE] ;
+      /* print all the files and directories within directory */
+      while ((ent = readdir (dir)) != NULL) {
+        bzero(temp,strlen(temp));
+        sprintf (temp,"<tr><td><a href=\"%s\">%s</a></td><td>2016-04-05 01:14</td><td>16</td></tr>",ent->d_name,ent->d_name);
+        strcat(buffer,temp);
+      }
+      closedir(dir);
+    } else {
+      /* could not open directory */
+      perror ("");
+      return ;
+    }  
+}
 
 void showErrorAndExit(char *msg){
     perror(msg);
@@ -190,9 +210,22 @@ void format_size(char* buf, struct stat *stat){
 
 // pre-process files in the "home" directory and send the list to the client
 void handle_directory_request(int out_fd, int dir_fd, char *filename){
-    
+    printf("Handle directory request\n");
+    char buffer[MAXLINE] ;
+    //rio_t rio ;
+    //rio_readinitb(&rio,out_fd);
     // send response headers to client e.g., "HTTP/1.1 200 OK\r\n"
-    
+    bzero(buffer,MAXLINE);
+    strcat(buffer,"HTTP/1.0 200 OK\n\n");
+    int n = write(out_fd,buffer,strlen(buffer));
+    printf("written %s \n total = %d \n",buffer,n );
+    //bzero(buffer,MAXLINE);
+    //strcat(buffer,"Content-type: text/html\r\n");
+    //n = written(out_fd,buffer,strlen(buffer));
+    bzero(buffer,MAXLINE);
+    strcat(buffer,"<html><head><style>body{font-family: monospace; font-size: 13px;}td {padding: 1.5px 6px;}</style></head><body><table>");
+    appedFilesHtmlFromDir(buffer);
+    printf("%s\n",buffer);
     // get file directory
     
     // read directory
@@ -200,6 +233,13 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename){
     // send the file buffers to the client
     
     // send recent browser data to the client
+    n = write(out_fd,buffer,strlen(buffer));
+    if(n > 0){
+        printf("Bytes written successfully %d\n", n);
+    }else{
+        printf("Error in writting to buffer\n");
+    }
+    //close(out_fd);
 }
 
 // utility function to get the MIME (Multipurpose Internet Mail Extensions) type
@@ -252,8 +292,20 @@ void url_decode(char* src, char* dest, int max) {
 }
 
 // parse request to get url
-void parse_request(int fd, http_request *req){
-
+void parse_request(int clientSocketId, http_request *req){
+    /**
+    typedef struct {
+    char filename[512];
+    int browser_index;
+    off_t offset;              // for support Range
+    size_t end;
+  } http_request;
+    */
+    char buffer[MAXLINE] ;
+    int n = 1;
+    n = read(clientSocketId,buffer,MAXLINE);
+    printf("buffer is :- %s\n",buffer);
+    printf("reading done :- \n");
     // Rio (Robust I/O) Buffered Input Functions
     
     
@@ -284,12 +336,12 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 }
 
 // handle one HTTP request/response transaction
-void process(int fd, struct sockaddr_in *clientaddr){
-    printf("accept request, fd is %d, pid is %d\n", fd, getpid());
+void process(int clientSocketId, struct sockaddr_in *clientaddr){
+    printf("accept request, clientSocketId is %d, pid is %d\n", clientSocketId, getpid());
     http_request req;
-    parse_request(fd, &req);
-
-    struct stat sbuf;
+    parse_request(clientSocketId, &req);
+    handle_directory_request(clientSocketId,0,"nothing");
+    /*struct stat sbuf;
     int status = 200; //server status init as 200
     int ffd = open(req.filename, O_RDONLY, 0);
     if(ffd <= 0){
@@ -310,9 +362,10 @@ void process(int fd, struct sockaddr_in *clientaddr){
         }
         close(ffd);
     }
+    */
     
     // print log/status on the terminal
-    log_access(status, clientaddr, &req);
+    //log_access(status, clientaddr, &req);
 }
 
 int checkAndUpdateUserInput(int argc, char** argv){
@@ -369,11 +422,14 @@ int main(int argc, char** argv){
                 showErrorAndExit(buffer);
             }
             if (clientPID == 0)  {
+                // child code
                 close(serverSocketFd);
                 process(clientSocketFd,&clientAddress);
+                printf("process finished\n");
                 exit(0);
             }
             else {
+               printf("closing client %d \n",clientSocketFd);
                close(clientSocketFd);
             }
         }else{

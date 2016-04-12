@@ -34,6 +34,7 @@
 #define ERROR  -1
 #define OK 1
 #define MAX_CLIENTS 9999
+ #define MAX_POOL 10
 #define RESPONSE_HEADER_SUCCESS "HTTP/1.1 200 OK\r\n"
 
 typedef struct {
@@ -76,6 +77,13 @@ mime_map meme_types [] = {
 };
 
 char *default_mime_type = "text/plain";
+char *browser_types[] = {"Chrome","Firefox","Safari","Internet Explorer","Opera"};
+
+char *browser_pool[MAX_POOL];
+int browserCount = 0;
+
+char* ip_address_pool[MAX_POOL];
+int ipAddressCount = 0;
 
 // declaring variables for server socket information
 int server_port_number;
@@ -121,7 +129,7 @@ void appedFilesHtmlFromDir(int dirFd, char *fileName, char *buffer){
         fstat(ffd, &sbuf);
         time_t time = sbuf.st_atime ;
         strftime(resultTime,30,"%Y-%m-%d %H:%M:%S", localtime(&time));
-        printf("FILE = %s\n", childFileName );
+        //printf("FILE = %s\n", childFileName );
         if(S_ISREG(sbuf.st_mode)){
             bzero(temp,strlen(temp));
             char fileSizeFormat[45];
@@ -130,12 +138,14 @@ void appedFilesHtmlFromDir(int dirFd, char *fileName, char *buffer){
             strcat(buffer,temp);
         }else{
             printf("Not a file\n");
+            fflush(stdout);
         }
+        close(ffd);
       }
       closedir(dir);
     } else {
       /* could not open directory */
-      printf ("Could not open directory :- %s ", fileName);
+      printf ("Could not open directory :- %s \n", fileName);
       return ;
     }  
 }
@@ -239,14 +249,15 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename){
     bzero(buffer,MAXLINE);
     strcat(buffer,"HTTP/1.0 200 OK\n\n");
     int n = write(out_fd,buffer,strlen(buffer));
-    printf("written %s \n total = %d \n",buffer,n );
+    //printf("written %s \n total = %d \n",buffer,n );
     // bzero(buffer,MAXLINE);
     // strcat(buffer,"Content-type:text/html\r\n");
     // n = written(out_fd,buffer,strlen(buffer));
     bzero(buffer,MAXLINE);
     strcat(buffer,"<html><head><style>body{font-family: monospace; font-size: 13px;}td {padding: 1.5px 6px;}</style></head><body><table>");
     appedFilesHtmlFromDir(dir_fd,filename,buffer);
-    printf("%s\n",buffer);
+    strcat(buffer,"</html>\n");
+    //printf("%s\n",buffer);
     // get file directory
     
     // read directory
@@ -254,11 +265,13 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename){
     // send the file buffers to the client
     
     // send recent browser data to the client
-    n = write(out_fd,buffer,strlen(buffer));
+    n = written(out_fd,buffer,strlen(buffer));
     if(n > 0){
         printf("Bytes written successfully %d\n", n);
+        fflush(stdout);
     }else{
         printf("Error in writting to buffer\n");
+        fflush(stdout);
     }
 }
 
@@ -312,20 +325,13 @@ void url_decode(char* src, char* dest, int max) {
 }
 
 // parse request to get url
-void parse_request(int clientSocketId, http_request *req){
-    /**
-    typedef struct {
-    char filename[512];
-    int browser_index;
-    off_t offset;              // for support Range
-    size_t end;
-  } http_request;
-    */
+int parse_request(int clientSocketId, http_request *req){
     rio_t rio ;
     rio_readinitb(&rio,clientSocketId); 
     char buffer[MAXLINE] ;
     int totalRead = rio_readlineb(&rio,buffer,MAXLINE);
     char *token;
+    int result = -1;
     if(totalRead > 0 && strstr(buffer,"GET") != NULL){
         printf("buffer is :- %s\n",buffer);
         /*GET / HTTP/1.1 */
@@ -336,27 +342,120 @@ void parse_request(int clientSocketId, http_request *req){
         strcat(req->filename,workingDirectory);
         strcat(req->filename,token);
         printf("File name is %s\n",req->filename );
+        //totalRead = rio_readlineb(&rio,buffer,MAXLINE);
         // GET request success
+        result = 0;
     }
     printf("reading done :- \n");
     // Rio (Robust I/O) Buffered Input Functions
-    
     
     // read all
     
     // update recent browser data
     
     // decode url
+    return result;
+    
 }
-
+int writeIpAddresses(){
+    char fileName[MAXLINE] ;
+    int result = -1;
+    sprintf(fileName,"%s%s",workingDirectory,"ip_address.txt");
+    FILE *file = fopen ( fileName, "w" );
+    printf("Write ip addresses to %s \n", fileName);
+    if(file!=NULL){
+        result = 0;
+        char line[256];
+        for(int i = 0 ; i < MAX_POOL ; i++){
+            if(ip_address_pool[i]!=NULL){
+                fprintf (file, "%s",ip_address_pool[i]);
+                printf("ip addresses written %s",ip_address_pool[i]);
+                free(ip_address_pool[i]);
+            }
+        }
+        fclose (file);
+    }else{
+        printf("Error in update ip address log file\n");
+    }
+    printf("finish write ip address\n");
+    return result;
+}
+int readIpAddresses(){
+    printf("readIpAddresses\n");
+    char fileName[MAXLINE] ;
+    int result = -1;
+    sprintf(fileName,"%s%s",workingDirectory,"ip_address.txt");
+    FILE *file = fopen (fileName,"r");
+    for(int i = 0 ; i < MAX_POOL ; i++){
+        free(ip_address_pool[i]);
+    }
+    printf("Reading ip addresses from  %s \n", fileName);
+    if(file != NULL){
+        result = 0;
+        size_t maxLine = 256;
+        char line[128];
+        ipAddressCount = 0;
+        int read = -1;
+        while (fgets(line, 255, (FILE*)file) > 0 &&  ipAddressCount < MAX_POOL)
+        {   
+            printf("ip addresses found %s",line);
+            ip_address_pool[ipAddressCount] = (char *)malloc(sizeof(line));
+            sprintf(ip_address_pool[ipAddressCount],"%s",line); 
+            printf("ip addresses at %d = %s",ipAddressCount,ip_address_pool[ipAddressCount]);
+            ipAddressCount++;
+        }
+        fclose(file);
+    }else{
+        printf("Error in update ip address log file\n");
+    }
+    printf("finish read ip address\n");
+    return result;
+}
 // log files
 void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
-
+    printf("log_access\n");
+    char *clientIpAddress = inet_ntoa(c_addr->sin_addr);
+    if(readIpAddresses() == 0){
+        printf("total count = %d\n", ipAddressCount);
+        if(ipAddressCount + 1 >= MAX_POOL){
+            ipAddressCount = 0;
+            free(ip_address_pool[ipAddressCount]); // free the last item in list
+            for(int i = 0 ; i < MAX_POOL - 1 ; i++){
+                ip_address_pool[i] = ip_address_pool[i+1];
+            }
+            ipAddressCount = MAX_POOL - 1 ;
+        }else{
+            ipAddressCount++;
+        }
+        printf("will update count  = %d and value swapped to %s \n", ipAddressCount,clientIpAddress);
+        ip_address_pool[ipAddressCount] =  (char *)malloc(sizeof(clientIpAddress));
+        sprintf(ip_address_pool[ipAddressCount],"%s\n",clientIpAddress); 
+        printf("updated count = %d and value = %s\n", ipAddressCount,ip_address_pool[ipAddressCount]);
+        writeIpAddresses();
+    }
+    printf("FInish log access\n");
 }
 
 // echo client error e.g. 404
-void client_error(int fd, int status, char *msg, char *longmsg){
+void client_error(int clientSocketFd, int status, char *msg, char *longmsg){
+    printf("Printing client error html %d %s %s\n",status,msg,longmsg );
+    char buffer[MAXLINE], body[MAXLINE];
+    bzero(buffer,MAXLINE);
+    bzero(body,MAXLINE);
+    /* Build the HTTP error response body */
+    sprintf(body, "<html><head><style>body{font-family: monospace; font-size: 13px;}td {padding: 1.5px 6px;}</style><title>Server Error</title></head>");
+    sprintf(body, "%s<body bgcolor=""ffffff"">\r\n", body);
+    sprintf(body, "%s %d: %s\r\n", body, status, msg);
+    sprintf(body, "%s<p>%s: %s\r\n", body, msg, longmsg);
+    sprintf(body, "%s<hr><em>Error page for Mini Web server</em>\r\n", body);
+    sprintf(body, "%s</body></html>\r\n", body);
 
+    /* Print the HTTP response */
+    sprintf(buffer, "HTTP/1.0 %d ERROR\n\n", status);
+    written(clientSocketFd, buffer, strlen(buffer));
+    written(clientSocketFd, body, strlen(body));
+    printf("%s\n",buffer );
+    printf("%s\n",body );
 }
 
 // serve static content
@@ -366,43 +465,62 @@ void serve_static(int out_fd, int in_fd, http_request *req, size_t total_size){
     char *srcp ;
     char *success = "HTTP/1.0 200 OK\n\n" ;
     int n = written(out_fd,success,strlen(success));
-    srcp = mmap(0, total_size, PROT_READ, MAP_PRIVATE, in_fd, 0);
-    written(out_fd, srcp, total_size); 
-    munmap(srcp, total_size); 
+    char buffer[MAXLINE] ;
+    int totalRead ;
+    rio_t rio ;
+    rio_readinitb(&rio,in_fd);
+    while( (totalRead = rio_read(&rio,buffer,MAXLINE)) > 0){
+        written(out_fd,buffer,totalRead);
+        bzero(buffer,totalRead);
+    }
 }
-
 // handle one HTTP request/response transaction
 void process(int clientSocketId, struct sockaddr_in *clientaddr){
-    printf("accept request, clientSocketId is %d, pid is %d\n", clientSocketId, getpid());
     http_request req;
-    parse_request(clientSocketId, &req);
-    struct stat sbuf;
-    int status = 200; //server status init as 200
-    int ffd = open(req.filename, O_RDONLY, 0);
-    if(ffd <= 0){
-        // detect 404 error and print error log
-        printf("detect 404 error and print error log\n");
-    } else {
-        // get descriptor status
-        fstat(ffd, &sbuf);
-        if(S_ISREG(sbuf.st_mode)){
-            printf("is FILE = %s \n", req.filename );
-            serve_static(clientSocketId,ffd,&req,sbuf.st_size);
-            // server serves static content
-            
-        } else if(S_ISDIR(sbuf.st_mode)){
-            printf("is DIR = %s \n", req.filename );
-            // server handle directory request
-            handle_directory_request(clientSocketId,ffd, req.filename);
-
+    char *clientIpAddress = inet_ntoa(clientaddr->sin_addr);
+    printf("accept request, clientSocketId is %d, pid is %d and ip address is %s \n", clientSocketId, getpid(),clientIpAddress);
+    int result = parse_request(clientSocketId, &req);
+    int status = 200;
+    if(result >= 0){
+        struct stat sbuf;
+        //server status init as 200
+        int ffd = open(req.filename, O_RDONLY, 0);
+        if(ffd <= 0){
+            status = 404;
+            client_error(clientSocketId,status,"Page not found","The webpage you requested is not found in the server");
+            printf("detect %d error and print error log\n",status);
         } else {
-            printf("detect 404 error and print error log\n");
+            // get descriptor status
+            fstat(ffd, &sbuf);
+            if(S_ISREG(sbuf.st_mode)){
+                printf("is FILE = %s \n", req.filename );
+                serve_static(clientSocketId,ffd,&req,sbuf.st_size);
+                // server serves static content
+                
+            } else if(S_ISDIR(sbuf.st_mode)){
+                printf("is DIR = %s \n", req.filename );
+                // server handle directory request
+                log_access(status, clientaddr, &req);
+                handle_directory_request(clientSocketId,ffd, req.filename);
+                fflush(stdout);
+                printf("handle directory request finshed\n");
+               // 
+
+            } else {
+                status = 404;
+                client_error(clientSocketId,status,"Page not found","The webpage you requested is not found in the server");
+                printf("detect %d error and print error log\n",status);
+            }
+            close(ffd);
         }
-        close(ffd);
+    }else{
+        status = 405;
+        client_error(clientSocketId,status,"Method not supported"," This mini server only supports GET method for http communication");
+        // detect 404 error and print error log
+        printf("detect %d error and print error log\n",status);
     }
-    
     // print log/status on the terminal
-    //log_access(status, clientaddr, &req);
+    printf("finish process request\n");
 }
 
 int checkAndUpdateUserInput(int argc, char** argv){

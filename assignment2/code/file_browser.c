@@ -34,8 +34,10 @@
 #define ERROR  -1
 #define OK 1
 #define MAX_CLIENTS 9999
- #define MAX_POOL 10
+#define MAX_POOL 11
 #define RESPONSE_HEADER_SUCCESS "HTTP/1.1 200 OK\r\n"
+#define FILE_BROSWER "recent_browser.txt"
+#define FILE_IP "ip_address.txt"
 
 typedef struct {
     int rio_fd;                 // descriptor for this buf
@@ -77,7 +79,7 @@ mime_map meme_types [] = {
 };
 
 char *default_mime_type = "text/plain";
-char *browser_types[] = {"Chrome","Firefox","Safari","Internet Explorer","Opera"};
+char *browser_types[] = {"Chrome","Safari","Firefox","Others","Others"};
 
 char *browser_pool[MAX_POOL];
 int browserCount = 0;
@@ -148,6 +150,63 @@ void appedFilesHtmlFromDir(int dirFd, char *fileName, char *buffer){
       printf ("Could not open directory :- %s \n", fileName);
       return ;
     }  
+}
+
+int appendBrowser(char *buffer){
+    printf("appendBrowser\n");
+    char fileName[MAXLINE] ;
+    int result = -1;
+    sprintf(fileName,"%s%s",workingDirectory,"recent_browser.txt");
+    FILE *file = fopen (fileName,"r");
+    printf("Reading browsers from  %s \n", fileName);
+    char temp[MAXLINE] ;
+    if(file != NULL){
+        sprintf(temp,"%s","<table><tr><td>The last visited browsers:</td>"); 
+        result = 0;
+        size_t maxLine = 256;
+        char line[128];
+        int read = -1;
+        while (fgets(line, 255, (FILE*)file) > 0)
+        {   
+            sprintf(temp,"%s<td>%s</td>",temp,line); 
+            fflush(stdout);
+        }
+        sprintf(temp,"%s%s",temp,"</tr>"); 
+        fclose(file);
+        strcat(buffer,temp);
+    }else{
+        printf("Error in update ip address log file\n");
+    }
+    printf("finish appendBrowser\n");
+    return result;
+}
+int appendIp(char *buffer){
+    printf("appendIp\n");
+    char fileName[MAXLINE] ;
+    int result = -1;
+    sprintf(fileName,"%s%s",workingDirectory,"ip_address.txt");
+    FILE *file = fopen (fileName,"r");
+    printf("Reading ip addresses from  %s \n", fileName);
+    char temp[MAXLINE] ;
+    if(file != NULL){
+        sprintf(temp,"%s","<tr><td>The corresponding IP addresses:</td>"); 
+        result = 0;
+        size_t maxLine = 256;
+        char line[128];
+        int read = -1;
+        while (fgets(line, 255, (FILE*)file) > 0)
+        {   
+            sprintf(temp,"%s<td>%s</td>",temp,line); 
+            fflush(stdout);
+        }
+        sprintf(temp,"%s%s",temp,"</tr>"); 
+        fclose(file);
+        strcat(buffer,temp);
+    }else{
+        printf("Error in update ip address log file\n");
+    }
+    printf("finish appendIp\n");
+    return result;
 }
 
 void showErrorAndExit(char *msg){
@@ -243,20 +302,16 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen){
 void handle_directory_request(int out_fd, int dir_fd, char *filename){
     printf("Handle directory request\n");
     char buffer[MAXLINE] ;
-    //rio_t rio ;
-    //rio_readinitb(&rio,out_fd);
     // send response headers to client e.g., "HTTP/1.1 200 OK\r\n"
     bzero(buffer,MAXLINE);
     strcat(buffer,"HTTP/1.0 200 OK\n\n");
     int n = write(out_fd,buffer,strlen(buffer));
-    //printf("written %s \n total = %d \n",buffer,n );
-    // bzero(buffer,MAXLINE);
-    // strcat(buffer,"Content-type:text/html\r\n");
-    // n = written(out_fd,buffer,strlen(buffer));
     bzero(buffer,MAXLINE);
     strcat(buffer,"<html><head><style>body{font-family: monospace; font-size: 13px;}td {padding: 1.5px 6px;}</style></head><body><table>");
     appedFilesHtmlFromDir(dir_fd,filename,buffer);
     strcat(buffer,"</html>\n");
+    appendBrowser(buffer);
+    appendIp(buffer);
     //printf("%s\n",buffer);
     // get file directory
     
@@ -341,6 +396,26 @@ int parse_request(int clientSocketId, http_request *req){
         bzero(req->filename,MAXLINE);
         strcat(req->filename,workingDirectory);
         strcat(req->filename,token);
+        bzero(buffer,MAXLINE);
+        while((totalRead = rio_readlineb(&rio,buffer,MAXLINE)) > 0 && strcmp(buffer,"\r\n") != 0 && strcmp(buffer,"\n\n") != 0 ){
+            if(strstr(buffer,"User-Agent") != NULL){
+                fflush(stdout);
+                if(strstr(buffer,"Chrome") != NULL){
+                    printf("browser detected chrome\n");
+                    req->browser_index = 0;
+                }else if (strstr(buffer,"Safari") != NULL){
+                    printf("browser detected safari\n");
+                    req->browser_index = 1;
+                }else if(strstr(buffer,"Firefox") != NULL){
+                    printf("browser detected firefox\n");
+                    req->browser_index = 2;
+                }else{
+                    printf("browser detected others\n");
+                    req->browser_index = 3;
+                }
+                bzero(buffer,MAXLINE);
+            }
+        }
         printf("File name is %s\n",req->filename );
         //totalRead = rio_readlineb(&rio,buffer,MAXLINE);
         // GET request success
@@ -369,7 +444,7 @@ int writeIpAddresses(){
         for(int i = 0 ; i < MAX_POOL ; i++){
             if(ip_address_pool[i]!=NULL){
                 fprintf (file, "%s",ip_address_pool[i]);
-                printf("ip addresses written %s",ip_address_pool[i]);
+                //printf("ip addresses written %s",ip_address_pool[i]);
                 free(ip_address_pool[i]);
             }
         }
@@ -398,11 +473,12 @@ int readIpAddresses(){
         int read = -1;
         while (fgets(line, 255, (FILE*)file) > 0 &&  ipAddressCount < MAX_POOL)
         {   
-            printf("ip addresses found %s",line);
+            //printf("ip addresses found %s",line);
             ip_address_pool[ipAddressCount] = (char *)malloc(sizeof(line));
             sprintf(ip_address_pool[ipAddressCount],"%s",line); 
-            printf("ip addresses at %d = %s",ipAddressCount,ip_address_pool[ipAddressCount]);
+            //printf("ip addresses at %d = %s",ipAddressCount,ip_address_pool[ipAddressCount]);
             ipAddressCount++;
+            fflush(stdout);
         }
         fclose(file);
     }else{
@@ -411,13 +487,99 @@ int readIpAddresses(){
     printf("finish read ip address\n");
     return result;
 }
-// log files
-void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
-    printf("log_access\n");
+int readBrowserLog(){
+    printf("readBrowserLog\n");
+    fflush(stdout);
+    char fileName[MAXLINE] ;
+    int result = -1;
+    sprintf(fileName,"%s%s",workingDirectory,"recent_browser.txt");
+    FILE *file = fopen (fileName,"r");
+    for(int i = 0 ; i < MAX_POOL ; i++){
+        free(browser_pool[i]);
+    }
+    printf("Reading browsers from  %s \n", fileName);
+    if(file != NULL){
+        result = 0;
+        size_t maxLine = 256;
+        char line[128];
+        browserCount = 0;
+        int read = -1;
+        while (fgets(line, 255, (FILE*)file) > 0 &&  browserCount < MAX_POOL)
+        {   
+            printf("browser found %s",line);
+            fflush(stdout);
+            browser_pool[browserCount] = (char *)malloc(sizeof(line));
+            sprintf(browser_pool[browserCount],"%s",line); 
+            printf("browserat %d = %s",browserCount,browser_pool[browserCount]);
+            fflush(stdout);
+            browserCount++;
+        }
+        fclose(file);
+    }else{
+        printf("Error in update browser log file\n");
+    }
+    printf("finish readBrowserLog\n");
+    fflush(stdout);
+    return result;
+}
+int writeBrowserLog(){
+    char fileName[MAXLINE] ;
+    int result = -1;
+    sprintf(fileName,"%s%s",workingDirectory,"recent_browser.txt");
+    FILE *file = fopen ( fileName, "w" );
+    printf("Write browser addresses to %s \n", fileName);
+    fflush(stdout);
+    if(file!=NULL){
+        result = 0;
+        char line[256];
+        for(int i = 0 ; i < MAX_POOL ; i++){
+            if(browser_pool[i]!=NULL){
+                fprintf (file, "%s",browser_pool[i]);
+                printf("browser written %s",browser_pool[i]);
+                fflush(stdout);
+                free(browser_pool[i]);
+            }else{
+                printf("browser not written ");
+            }
+        }
+        fclose (file);
+    }else{
+        printf("Error in update ip address log file\n");
+    }
+    printf("finish write ip address\n");
+    return result;
+}
+void logBrowserData(http_request *req){
+    printf("logBrowserData\n");
+    if(readBrowserLog() == 0){
+        printf("total count = %d\n", browserCount);
+        if(browserCount >= MAX_POOL){
+            browserCount = 0;
+            free(browser_pool[browserCount]); // free the last item in list
+            for(int i = 0 ; i < MAX_POOL - 1 ; i++){
+                browser_pool[i] = browser_pool[i+1];
+            }
+            browserCount = MAX_POOL - 1 ;
+        }else{
+            browserCount++;
+        }
+        printf("will update browser count  = %d and value swapped to %d \n", browserCount,req->browser_index);
+        fflush(stdout);
+        browser_pool[browserCount] =  (char *)malloc(sizeof(browser_types[req->browser_index]));
+        sprintf(browser_pool[browserCount],"%s\n",browser_types[req->browser_index]); 
+        printf("updated count = %d and value = %s\n", browserCount,browser_pool[browserCount]);
+        fflush(stdout);
+        writeBrowserLog();
+    }
+    printf("logBrowserData finished\n");
+    fflush(stdout);
+}
+void logIpAddress(struct sockaddr_in *c_addr){
+    printf("logIpAddress\n");
     char *clientIpAddress = inet_ntoa(c_addr->sin_addr);
     if(readIpAddresses() == 0){
         printf("total count = %d\n", ipAddressCount);
-        if(ipAddressCount + 1 >= MAX_POOL){
+        if(ipAddressCount >= MAX_POOL){
             ipAddressCount = 0;
             free(ip_address_pool[ipAddressCount]); // free the last item in list
             for(int i = 0 ; i < MAX_POOL - 1 ; i++){
@@ -433,6 +595,15 @@ void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
         printf("updated count = %d and value = %s\n", ipAddressCount,ip_address_pool[ipAddressCount]);
         writeIpAddresses();
     }
+    printf("logIpAddress finished\n");
+    fflush(stdout);
+}
+
+// log files
+void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
+    printf("log_access\n");
+    logIpAddress(c_addr);
+    logBrowserData(req);
     printf("FInish log access\n");
 }
 

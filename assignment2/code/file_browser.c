@@ -553,17 +553,17 @@ void logBrowserData(http_request *req){
     printf("logBrowserData\n");
     if(readBrowserLog() == 0){
         printf("total count = %d\n", browserCount);
-        if(browserCount >= MAX_POOL){
+        if(browserCount >= MAX_POOL - 1){
             browserCount = 0;
             free(browser_pool[browserCount]); // free the last item in list
-            for(int i = 0 ; i < MAX_POOL - 1 ; i++){
+            for(int i = 0 ; i < MAX_POOL - 2 ; i++){
                 browser_pool[i] = browser_pool[i+1];
             }
-            browserCount = MAX_POOL - 1 ;
+            browserCount = MAX_POOL - 2 ;
         }else{
             browserCount++;
         }
-        printf("will update browser count  = %d and value swapped to %d \n", browserCount,req->browser_index);
+        printf("will update browser count  = %d and value swapped to %s /n", browserCount,browser_pool[req->browser_index]);
         fflush(stdout);
         browser_pool[browserCount] =  (char *)malloc(sizeof(browser_types[req->browser_index]));
         sprintf(browser_pool[browserCount],"%s\n",browser_types[req->browser_index]); 
@@ -579,13 +579,13 @@ void logIpAddress(struct sockaddr_in *c_addr){
     char *clientIpAddress = inet_ntoa(c_addr->sin_addr);
     if(readIpAddresses() == 0){
         printf("total count = %d\n", ipAddressCount);
-        if(ipAddressCount >= MAX_POOL){
+        if(ipAddressCount >= MAX_POOL -1){
             ipAddressCount = 0;
             free(ip_address_pool[ipAddressCount]); // free the last item in list
-            for(int i = 0 ; i < MAX_POOL - 1 ; i++){
+            for(int i = 0 ; i < MAX_POOL - 2 ; i++){
                 ip_address_pool[i] = ip_address_pool[i+1];
             }
-            ipAddressCount = MAX_POOL - 1 ;
+            ipAddressCount = MAX_POOL - 2 ;
         }else{
             ipAddressCount++;
         }

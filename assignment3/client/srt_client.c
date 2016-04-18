@@ -58,8 +58,8 @@ void reset_clients(){
 	fflush(stdout);
 }
 
-client_tcb_t * get_client_fron_port(int port_num){
-	printf("get_client_fron_port\n");
+client_tcb_t * get_client_from_port(int port_num){
+	printf("get_client_from_port\n");
 	for(int i = 0 ; i < MAX_TRANSPORT_CONNECTIONS ; i++){
 		if(clients[i] != NULL && clients[i]->client_portNum == port_num){
 			return clients[i];
@@ -327,7 +327,7 @@ void *seghandler(void* arg) {
 		pthread_exit(NULL);
   	}
   	printf("seghandler message received \n");
-  	client = get_client_fron_port(msg.header.dest_port);
+  	client = get_client_from_port(msg.header.dest_port);
 	  	if(client){
 	  	switch(msg.header.type){
 	  		case SYNACK :{
@@ -336,7 +336,7 @@ void *seghandler(void* arg) {
 	  				printf("CONNECTED");
 	  				client->state = CONNECTED;
 	  			}else{
-	  				printf("NOT CONNECTED\n");
+	  				printf("ALREADY CONNECTED\n");
 	  			}
 	  		}
 	  		break;

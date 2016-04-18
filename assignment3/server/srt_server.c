@@ -111,10 +111,10 @@ void srt_server_init(int conn) {
 	printf("srt_server_init\n");
 	mainTcpSockId = conn ;
 	reset_servers();
-	fflush(stdout);
 	pthread_create(&pthread_receiver,NULL,seghandler,(void*)NULL);
 	printf("srt_server_init ends\n");
-  return;
+	fflush(stdout);
+ 	return;
 }
 
 // Create a server sock
@@ -187,7 +187,14 @@ int srt_server_recv(int sockfd, void* buf, unsigned int length) {
 
 int srt_server_close(int sockfd) {
 	printf("srt_server_close\n");
-	return freeServer(sockfd);
+	if(sockfd < 0 || sockfd > MAX_TRANSPORT_CONNECTIONS || servers[sockfd] == NULL){
+		printf("Error in srt_server_close sockfd = %d max clients supported = %d\n", sockfd, MAX_TRANSPORT_CONNECTIONS);
+		return -1;
+	}
+	if(servers[sockfd]->state == CLOSED){ // as per the comments above we need to check if state is CLOSED.
+		return freeServer(sockfd);
+	}
+	return -1;
 }
 void *closewait_timeout(void *server_args){
 	svr_tcb_t *server = (svr_tcb_t *) server_args;
@@ -200,8 +207,8 @@ void handle_syn_recieve(svr_tcb_t *server, seg_t *msg){
 	printf("handle_syn_recieve \n");
 	if(server->state == LISTENING){
 		server->state = CONNECTED;
+		server->client_portNum = msg->header.src_port; // update client port
 	}
-	server->client_portNum = msg->header.src_port; // update client port
 	seg_t segment;
 	bzero(&segment,sizeof(segment));
 	segment.header.src_port = msg->header.dest_port;
@@ -213,6 +220,7 @@ void handle_syn_recieve(svr_tcb_t *server, seg_t *msg){
 		printf("Error in sending message sockfd = %d \n", mainTcpSockId);
 	}
 	printf("handle_syn_recieve ends\n");
+	fflush(stdout);
 }
 void handle_fin_recieve(svr_tcb_t *server, seg_t *msg){
 	printf("handle_fin_recieve \n");
@@ -265,8 +273,8 @@ void *seghandler(void* arg) {
   			}
   			break;
   			case FIN:{
-  				handle_syn_recieve(server,&msg);
   				printf("FIN received\n");
+  				handle_fin_recieve(server,&msg);
   			}
   			break;
   		}

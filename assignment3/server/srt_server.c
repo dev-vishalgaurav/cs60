@@ -40,6 +40,14 @@ pthread_t pthread_receiver;
 int total_connection = 0 ;
 int mainTcpSockId;
 
+void wait_for_some_time(int nano_sec){
+	// sleep for 1000 nano seconds before next iteration 
+	struct timespec tim;
+	tim.tv_sec = 0;
+	tim.tv_nsec = nano_sec;
+	nanosleep(&tim,NULL);
+}
+
 long current_time_millis(){
 	struct timeval stop, start;
 	gettimeofday(&start, NULL);
@@ -152,11 +160,7 @@ int srt_server_accept(int sockfd) {
 		printf("changing state to LISTENING\n");
 		server->state = LISTENING;
 		while(server->state != CONNECTED){
-			// sleep for 1000 nano seconds before next iteration 
-			struct timespec tim;
-			tim.tv_sec = 0;
-			tim.tv_nsec = 1000;
-			nanosleep(&tim,NULL);
+			wait_for_some_time(LOOP_WAITING_TIME);
 		}
 		printf("state changed to CONNECTED \n");
 	}else{

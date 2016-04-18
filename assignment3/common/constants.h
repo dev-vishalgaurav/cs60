@@ -30,6 +30,8 @@
 //SYN_TIMEOUT value in mili seconds
 #define FINSEG_TIMEOUT_MS FINSEG_TIMEOUT_NS/1000000
 
+#define LOOP_WAITING_TIME 1000
+
 
 //max number of SYN retransmissions in srt_client_connect()
 #define SYN_MAX_RETRY 5

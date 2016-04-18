@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
@@ -73,7 +74,7 @@ int freeClient(int sock_fd){
 	int result = -1;
 	if(sock_fd < MAX_TRANSPORT_CONNECTIONS){
 		free(clients[sock_fd]);
-		result = 0 ;
+		result = 1 ;
 	}
 	fflush(stdout);
 	return result;
@@ -133,14 +134,7 @@ void srt_client_init(int conn) {
 int srt_client_sock(unsigned int client_port) {
 	printf("srt_client_sock\n");
 	fflush(stdout);
-  return get_new_client_socket(client_port);
-}
-
-int wrap_send_segment(int sockfd, unsigned int server_port, int current_state, int expected_state){
-	printf("wrap_send_segment\n");
-
-  	printf("wrap_send_segment ends\n");
-  	fflush(stdout);
+  	return get_new_client_socket(client_port);
 }
 
 // Connect to a srt server
@@ -157,23 +151,7 @@ int wrap_send_segment(int sockfd, unsigned int server_port, int current_state, i
 //
 
 int srt_client_connect(int sockfd, unsigned int server_port) {
-  printf("srt_client_connect\n");
-  fflush(stdout);
-	/**
-	typedef struct client_tcb {
-	unsigned int svr_nodeID;        
-	unsigned int svr_portNum;       
-	unsigned int client_nodeID;    
-	unsigned int client_portNum;    
-	unsigned int state;     	
-	unsigned int next_seqNum;       
-	pthread_mutex_t* bufMutex;      
-	segBuf_t* sendBufHead;         
-	segBuf_t* sendBufunSent;       
-	segBuf_t* sendBufTail;         
-	unsigned int unAck_segNum;      
-	} client_tcb_t;
-	*/
+	printf("srt_client_connect\n");
 	if(sockfd < 0 || sockfd > MAX_TRANSPORT_CONNECTIONS || clients[sockfd] == NULL)
 	{
 		printf("Error in srt_client_connect sockfd = %d max clients supported = %d\n", sockfd, MAX_TRANSPORT_CONNECTIONS);
@@ -189,7 +167,7 @@ int srt_client_connect(int sockfd, unsigned int server_port) {
 	int trialNum = 0 ;
 	//  first trial
 	if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
-		printf("Error in sending message sockfd = %d \n", sockfd);
+		printf("Error in sending message in TCP layer = %d \n", mainTcpSockId);
 		return -1;
 	}
 	long start_time = current_time_millis(); // timer started
@@ -246,8 +224,50 @@ int srt_client_send(int sockfd, void* data, unsigned int length) {
 
 int srt_client_disconnect(int sockfd) {
 	printf("srt_client_disconnect\n");
+	if(sockfd < 0 || sockfd > MAX_TRANSPORT_CONNECTIONS || clients[sockfd] == NULL)
+	{
+		printf("Error in srt_client_disconnect sockfd = %d max clients supported = %d\n", sockfd, MAX_TRANSPORT_CONNECTIONS);
+		return -1;
+	}
+	client_tcb_t *client = clients[sockfd];
+	seg_t segment;
+	bzero(&segment,sizeof(segment));
+	segment.header.src_port = client->client_portNum;
+	segment.header.dest_port = client->svr_portNum;
+	segment.header.type = FIN;
+	segment.header.length = 0;
+	int trialNum = 0 ;
+	//  first trial
+	if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
+		printf("Error in sending message in TCP layer = %d \n", mainTcpSockId);
+		return -1;
+	}
+	long start_time = current_time_millis(); // timer started
+	trialNum++; // increment trial num
+	client->state = FINWAIT ;
+	while(client->state == FINWAIT){
+		long now = current_time_millis();
+		long diff = now - start_time ;
+		if((diff ) > FINSEG_TIMEOUT_MS){
+			printf("time out in connect %d for trial num = %d \n", sockfd, trialNum);
+			if(trialNum < FIN_MAX_RETRY){
+				printf("resending segment \n");
+				if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
+					printf("Error in sending message sockfd = %d \n", sockfd);
+					return -1;
+				}
+				start_time = (long)time(NULL); // reset timer
+				trialNum++;
+			}else{
+				printf("max trial reached in connect segment of sock fd %d\n" ,sockfd);
+				client->state = CLOSED;
+				return -1;
+			}
+		}	
+	}
+	printf("srt_client_disconnect ends\n");
   	fflush(stdout);
-  	return 0;
+  	return 1;
 }
 
 
@@ -265,7 +285,25 @@ int srt_client_close(int sockfd) {
   	fflush(stdout);
 	return freeClient(sockfd);
 }
+/**
+typedef struct srt_hdr {
+	unsigned int src_port;        //source port number
+	unsigned int dest_port;       //destination port number
+	unsigned int seq_num;         //sequence number, used for data transmission. you will not use them in lab3
+	unsigned int ack_num;         //ack number, used for data transmission. you will not use them in lab3
+	unsigned short int length;    //segment data length
+	unsigned short int  type;     //segment type
+	unsigned short int  rcv_win;  //currently not used
+	unsigned short int checksum;  //currently not used
+} srt_hdr_t;
 
+//segment definition
+
+typedef struct segment {
+	srt_hdr_t header;
+	char data[MAX_SEG_LEN];
+} seg_t;
+**/
 // The thread handles incoming segments
 //
 // This is a thread  started by srt_client_init(). It handles all the incoming
@@ -277,8 +315,46 @@ int srt_client_close(int sockfd) {
 
 void *seghandler(void* arg) {
   printf("seghandler receive\n");
+  // int recvseg(int connection, seg_t* segPtr);
+  seg_t msg ;
+  client_tcb_t *client ;
   while(1){
-  	printf("seghandler check %d \n" , (int)time(NULL));
+  	if(recvseg(mainTcpSockId,&msg) < 0){
+  		printf("client recvseg return negative hence exiting\n");
+  		printf("exiting thread and closing main tcp connection\n");
+  		fflush(stdout);
+  		close(mainTcpSockId);
+		pthread_exit(NULL);
+  	}
+  	printf("seghandler message received \n");
+  	client = get_client_fron_port(msg.header.dest_port);
+	  	if(client){
+	  	switch(msg.header.type){
+	  		case SYNACK :{
+	  			printf("SYNACK RECIEVED client port = %d and server port = %d\n", client->svr_portNum, msg.header.src_port   );
+	  			if(client->state == SYNSENT){
+	  				printf("CONNECTED");
+	  				client->state = CONNECTED;
+	  			}else{
+	  				printf("NOT CONNECTED\n");
+	  			}
+	  		}
+	  		break;
+	  		case FINACK :{
+	  			printf("FINACK RECIEVED client port = %d and server port = %d \n", client->svr_portNum, msg.header.src_port   );
+	  			if(client->state == FINWAIT){
+	  				printf("CLOSED");
+	  				client->state = CLOSED;
+	  			}else{
+	  				printf("NOT CLOSED\n");
+	  			}
+
+	  		}
+	  		break;
+	  	}
+    }else{
+  		printf("client TCB not found for %d \n",msg.header.src_port);
+  	}
   }
   fflush(stdout);
   return 0;

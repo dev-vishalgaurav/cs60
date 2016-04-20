@@ -47,6 +47,13 @@ long current_time_millis(){
 	return (long)start.tv_usec;
 }
 
+void wait_for_some_time(int nano_sec){
+	// sleep for 1000 nano seconds before next iteration 
+	struct timespec tim;
+	tim.tv_sec = 0;
+	tim.tv_nsec = nano_sec;
+	nanosleep(&tim,NULL);
+}
 void reset_clients(){
 	printf("reset_clients\n");
 	for(int i = 0 ; i < MAX_TRANSPORT_CONNECTIONS ; i++){
@@ -174,20 +181,21 @@ int srt_client_connect(int sockfd, unsigned int server_port) {
 	trialNum++; // increment trial num
 	client->state = SYNSENT ;
 	while(client->state == SYNSENT){
+		wait_for_some_time(LOOP_WAITING_TIME);
 		long now = current_time_millis();
 		long diff = now - start_time ;
 		if((diff ) > SYNSEG_TIMEOUT_MS){
-			printf("time out in connect %d for trial num = %d \n", sockfd, trialNum);
+			printf("TIMEOUT in connect %d for trial num = %d \n", sockfd, trialNum);
 			if(trialNum < SYN_MAX_RETRY){
 				printf("resending segment \n");
 				if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
-					printf("Error in sending message sockfd = %d \n", sockfd);
+					printf("ERROR in sending message sockfd = %d \n", sockfd);
 					return -1;
 				}
 				start_time = (long)time(NULL); // reset timer
 				trialNum++;
 			}else{
-				printf("max trial reached in connect segment of sock fd %d\n" ,sockfd);
+				printf("MAX TRIAL reached in connect segment of sock fd %d\n" ,sockfd);
 				client->state = CLOSED;
 				return -1;
 			}
@@ -246,10 +254,11 @@ int srt_client_disconnect(int sockfd) {
 	trialNum++; // increment trial num
 	client->state = FINWAIT ;
 	while(client->state == FINWAIT){
+		wait_for_some_time(LOOP_WAITING_TIME);
 		long now = current_time_millis();
 		long diff = now - start_time ;
 		if((diff ) > FINSEG_TIMEOUT_MS){
-			printf("time out in connect %d for trial num = %d \n", sockfd, trialNum);
+			printf("TIMEOUT in connect %d for trial num = %d \n", sockfd, trialNum);
 			if(trialNum < FIN_MAX_RETRY){
 				printf("resending segment \n");
 				if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
@@ -259,7 +268,7 @@ int srt_client_disconnect(int sockfd) {
 				start_time = (long)time(NULL); // reset timer
 				trialNum++;
 			}else{
-				printf("max trial reached in connect segment of sock fd %d\n" ,sockfd);
+				printf("MAX TRIAL reached in connect segment of sock fd %d\n" ,sockfd);
 				client->state = CLOSED;
 				return -1;
 			}
@@ -333,7 +342,7 @@ void *seghandler(void* arg) {
 	  		case SYNACK :{
 	  			printf("SYNACK RECIEVED client port = %d and server port = %d\n", client->svr_portNum, msg.header.src_port   );
 	  			if(client->state == SYNSENT){
-	  				printf("CONNECTED");
+	  				printf("CONNECTED\n");
 	  				client->state = CONNECTED;
 	  			}else{
 	  				printf("ALREADY CONNECTED\n");
@@ -343,7 +352,7 @@ void *seghandler(void* arg) {
 	  		case FINACK :{
 	  			printf("FINACK RECIEVED client port = %d and server port = %d \n", client->svr_portNum, msg.header.src_port   );
 	  			if(client->state == FINWAIT){
-	  				printf("CLOSED");
+	  				printf("CLOSED\n");
 	  				client->state = CLOSED;
 	  			}else{
 	  				printf("NOT CLOSED\n");

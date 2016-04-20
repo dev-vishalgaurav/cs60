@@ -61,7 +61,7 @@ int freeServer(int sock_fd){
 		free(servers[sock_fd]);
 		result = 1 ;
 	}
-	printf("freeServer\n");
+	printf("freeServer ends\n");
 	fflush(stdout);
 	return result;
 }
@@ -73,6 +73,7 @@ void reset_servers(){
 		}
 		servers[i] = NULL;
 	}
+	printf("reset_servers ends\n");
 	fflush(stdout);
 }
 int get_new_server_socket(int server_port){
@@ -223,6 +224,7 @@ void handle_syn_recieve(svr_tcb_t *server, seg_t *msg){
 	if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
 		printf("Error in sending message sockfd = %d \n", mainTcpSockId);
 	}
+	printf("SYNACK sent\n");
 	printf("handle_syn_recieve ends\n");
 	fflush(stdout);
 }
@@ -244,6 +246,7 @@ void handle_fin_recieve(svr_tcb_t *server, seg_t *msg){
 	if(sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
 		printf("Error in sending message sockfd = %d \n", mainTcpSockId);
 	}
+	printf("FINACK sent\n");
 	printf("handle_fin_recieve ends \n");
 }
 // Thread handles incoming segments

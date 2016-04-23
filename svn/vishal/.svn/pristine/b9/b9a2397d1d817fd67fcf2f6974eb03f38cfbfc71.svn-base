@@ -97,5 +97,5 @@ int recvseg(int connection, seg_t* segPtr);
 //}
 //
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-int seglostTemp();
-int seglost(seg_t* segPtr)
+int seglost();
+#endif

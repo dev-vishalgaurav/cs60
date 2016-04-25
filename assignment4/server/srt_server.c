@@ -282,9 +282,10 @@ printf("seghandler receive\n");
   while(1){
   	if(snp_recvseg(mainTcpSockId,&msg) < 0){
   		printf("client recvseg return negative hence exiting\n");
-  		printf("exiting thread and closing main tcp connection\n");
+  		printf("closing main tcp connection\n");
   		fflush(stdout);
   		close(mainTcpSockId);
+		printf("exiting seg handler thread\n");
 		pthread_exit(NULL);
   	}
   	printf("seghandler message receive\n");

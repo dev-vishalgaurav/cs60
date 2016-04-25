@@ -232,6 +232,18 @@ int srt_client_connect(int sockfd, unsigned int server_port)
   return 1; // returning success it can be rechecked with state = CONNECTED
 }
 /**
+* prints the client buffer starting from sendBufHead
+*/
+void printBuffer(client_tcb_t *client){
+	segBuf_t *head = client->sendBufHead;
+	printf("printinng LINKED LIST :- \n");
+	while(head){
+		printf(" \n\n NODE seq Num = %d \n\n", head->seg.header.seq_num);
+		printf(" %s \n", head->seg.data);
+		head = head->next;
+	}
+}
+/**
 * this method will add a new segment to tcb. It will take care of head and tail to point to proper location. 
 * It will also add proper sequence number to each segments and will update the next seq number in client tcb
 * sequence number of segment passed would be the current seq number of client tcb
@@ -292,14 +304,16 @@ int srt_client_send(int sockfd, void* data, unsigned int length)
 			}else{
 				newSeg->seg.header.length = MAX_SEG_LEN;
 			}
-			printf("segment length to be chunked is %d \n",newSeg->seg.header.length);
+			//printf("segment length to be chunked is %d \n",newSeg->seg.header.length);
 			// now casting data to char* since segment structure has a char array
 			char *data_in_char = (char *)data;
 			// newSeg->seg.data is char of size MAX_SEG_LEN
 			// data_in_char is a an array of chars
 			memcpy(newSeg->seg.data,&data_in_char[i*MAX_SEG_LEN],newSeg->seg.header.length);
-			printf("chunked \"%s\" from full data %s\n", newSeg->seg.data , data_in_char);
+			//printf("chunked \"%s\" from full data %s\n", newSeg->seg.data , data_in_char);
+			append_segment_to_client(client,newSeg);
 		}
+		//printBuffer(client)
 		return 1;
 	}
 	printf("srt_client_send ends\n");
@@ -382,8 +396,120 @@ int srt_client_close(int sockfd)
   	fflush(stdout);
 	return freeClient(sockfd);
 }
-
-
+/**
+* function to manage syn ack from server
+*/
+void handle_syn_ack(client_tcb_t *client){
+	pthread_mutex_lock(client->bufMutex);
+	printf("handle_syn_ack starts\n");
+	if(client->state == SYNSENT){
+		printf("CONNECTED\n");
+		client->state = CONNECTED;
+	}else{
+		printf("ALREADY CONNECTED\n");
+	}
+	printf("handle_syn_ack ends\n");
+	pthread_mutex_unlock(client->bufMutex);
+	fflush(stdout);
+}
+/**
+* function to manage fin ack from server
+*/
+void handle_fin_ack(client_tcb_t *client){
+	pthread_mutex_lock(client->bufMutex);
+	printf("handle_fin_ack starts\n");
+	if(client->state == FINWAIT){
+	  	printf("CLOSED\n");
+	  	client->state = CLOSED;
+	}else{
+		printf("NOT CLOSED\n");
+	}
+	printf("handle_fin_ack ends\n");
+	pthread_mutex_unlock(client->bufMutex);
+	fflush(stdout);
+}
+/**
+* function to free all unAcked segments less than the passed segment number. It assumes that it is called with a mutex lock
+*/
+void free_unack_segments(client_tcb_t *client, int ack_seq_number){
+	printf("free_unack_segments \n");
+	segBuf_t *head = client->sendBufHead;
+	while(head != NULL && head->seg.header.seq_num < ack_seq_number){
+		segBuf_t *temp = head;
+		head = head->next;
+		free(temp);
+		client->unAck_segNum--;
+	}
+	if(head == NULL){ // it terminated because there is no segment to free
+		printf(" HEAD became NULL hence no segments set tail to NULL\n");
+		client->sendBufTail = NULL;
+	}
+	printf("free_unack_segments ends\n");
+	fflush(stdout);
+}
+/**
+* 
+*/
+void send_unsent_segments(client_tcb_t *client){
+	printf("send_unsent_segments starts \n");
+	while(client->sendBufunSent && client->unAck_segNum < GBN_WINDOW){
+		// 1. send the segment
+		// 2. check if it was succesfull
+		// 3. update the sent time 
+		// 4. start the timeout thread if required which means client->unAck_segNum should be zero 
+		// 5. switch to next segment
+		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
+			printf("DATA PACKET SENT sequence number %d sent to server \n",client->sendBufunSent->seg.header.seq_num);
+			client->sendBufunSent->sentTime = current_time_millis();
+			client->sendBufunSent = client->sendBufunSent->next;
+			if(client->unAck_segNum == 0) { // check 
+				printf("TIMEOUT thread create called\n");
+				pthread_t timeout_thread;
+				pthread_create(&timeout_thread,NULL,sendBuf_timer, (void*)client);
+			}
+			client->unAck_segNum++;
+		}else{
+			printf("ERROR (send_unsent_segments) in snp_sendseg exiting TCP error \n");
+			exit(-1);
+		}
+	}
+	printf("send_unsent_segments ends \n");
+}
+/**
+* function to manage data ack from server
+*/
+void handle_data_ack(client_tcb_t *client, seg_t *msg){
+	if(client->state == CONNECTED){
+		pthread_mutex_lock(client->bufMutex);
+		printf("handle_data_ack starts\n");
+		free_unack_segments(client,msg->header.seq_num);
+		printf("handle_data_ack ends\n");
+		pthread_mutex_lock(client->bufMutex);
+	}else{
+		printf("ERROR in DATAACK. received data ack in UNCONNECTED state\n");
+	}
+	fflush(stdout);
+}
+/**
+*
+*/
+void handle_timeout_resend(client_tcb_t *client){
+	printf("handle_timeout_resend starts\n");
+	int unack_count = 0 ;
+	segBuf_t *head = client->sendBufHead;
+	while(head && unack_count < client->unAck_segNum){
+		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
+			printf("DATA PACKET RESENT sequence number %d sent to server \n",head->seg.header.seq_num);
+			head->sentTime = current_time_millis();
+			head = head->next;
+			unack_count++;
+		}else{
+			printf("ERROR (handle_timeout_resend) in snp_sendseg exiting TCP error \n");
+			exit(-1);
+		}
+	}
+	printf("handle_timeout_resend ends\n");
+}
 // This is a thread  started by srt_client_init(). It handles all the incoming 
 // segments from the server. The design of seghanlder is an infinite loop that calls snp_recvseg(). If
 // snp_recvseg() fails then the overlay connection is closed and the thread is terminated. Depending
@@ -409,28 +535,18 @@ void *seghandler(void* arg)
 	  	if(client){
 	  	switch(msg.header.type){
 	  		case SYNACK :{
-	  			printf("SYNACK RECIEVED client port = %d and server port = %d\n", client->svr_portNum, msg.header.src_port   );
-	  			if(client->state == SYNSENT){
-	  				printf("CONNECTED\n");
-	  				client->state = CONNECTED;
-	  			}else{
-	  				printf("ALREADY CONNECTED\n");
-	  			}
+	  			printf("SYNACK RECIEVED client port = %d and server port = %d\n", client->svr_portNum, msg.header.src_port);
+	  			handle_syn_ack(client);
 	  		}
 	  		break;
 	  		case FINACK :{
-	  			printf("FINACK RECIEVED client port = %d and server port = %d \n", client->svr_portNum, msg.header.src_port   );
-	  			if(client->state == FINWAIT){
-	  				printf("CLOSED\n");
-	  				client->state = CLOSED;
-	  			}else{
-	  				printf("NOT CLOSED\n");
-	  			}
-
+	  			printf("FINACK RECIEVED client port = %d and server port = %d \n", client->svr_portNum, msg.header.src_port);
+	  			handle_fin_ack(client);
 	  		}
 	  		break;
 	  		case DATAACK: {
-
+	  			printf("DATAACK RECIEVED client port = %d and server port = %d \n", client->svr_portNum, msg.header.src_port);
+	  			handle_data_ack(client,&msg);
 	  		}
 	  		break;
 	  	}
@@ -450,18 +566,28 @@ void *seghandler(void* arg)
 // When timeout, resend all sent-but-unAcked segments
 // When the send buffer is empty, this thread terminates
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-void* sendBuf_timer(void* clienttcb)
+void* sendBuf_timer(void *clienttcb)
 {	
-  client_tcb_t *client = (client_tcb_t *) clienttcb ;	
-  while(client->sendBufHead){
+  client_tcb_t *client = (client_tcb_t *) clienttcb ;
+  printf("TIMEOUT thread started\n");	
+  while(1){
   		wait_for_some_time(SENDBUF_POLLING_INTERVAL);
+  		pthread_mutex_lock(client->bufMutex);
   		printf("POLLING sendBuf_timer\n");
-  		long currentTime = current_time_millis();
-  		long diff = currentTime - client->sendBufHead->sentTime;
-  		if(diff >= DATA_TIMEOUT){
-  			printf("TIMEOUT for sent-but-unAcked\n");
+  		if(client->unAck_segNum == 0) {
+  			printf("NOTHING to send in timeout buffer hence exiting buffer thread\n");
+  			pthread_mutex_unlock(client->bufMutex);
+			pthread_exit(NULL);
+		}else{
+  			long currentTime = current_time_millis();
+  			long diff = currentTime - client->sendBufHead->sentTime;
+  			if(diff >= DATA_TIMEOUT){
+  				printf("TIMEOUT for sent-but-unAcked\n");
+  				//resend all in buffer
+  				handle_timeout_resend(client);
+  			}
   		}
-  		// resend all 	
+		pthread_mutex_lock(client->bufMutex); 	
   }
   return 0;
 }

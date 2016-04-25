@@ -44,8 +44,7 @@
 //
 int snp_sendseg(int connection, seg_t* segPtr)
 {
-	fflush(stdout);
-  	printf("sendseg connection = %d, client_port = %d, server_port = %d \n", connection, segPtr->header.src_port, segPtr->header.dest_port);
+  printf("snp_sendseg connection = %d, client_port = %d, server_port = %d \n", connection, segPtr->header.src_port, segPtr->header.dest_port);
 	char bufstart[2];
 	char bufend[2];
 	bufstart[0] = '!';
@@ -53,19 +52,14 @@ int snp_sendseg(int connection, seg_t* segPtr)
 	bufend[0] = '!';
 	bufend[1] = '#';
 	if (send(connection, bufstart, 2, 0) < 0) {
-		printf("snp_sendseg ERROR 1 \n");
 		return -1;
 	}
 	if(send(connection,segPtr,sizeof(seg_t),0)<0) {
-		printf("snp_sendseg ERROR 2 \n");
 		return -1;
 	}
 	if(send(connection,bufend,2,0)<0) {
-		printf("snp_sendseg ERROR 3 \n");
 		return -1;
 	}
-	printf("snp_sendseg success\n");
-	fflush(stdout);
 	return 1;
 }
 
@@ -88,7 +82,7 @@ int snp_sendseg(int connection, seg_t* segPtr)
 //  We flip  a random bit in the segment to create invalid checksum
 int snp_recvseg(int connection, seg_t* segPtr)
 {
-  char buf[sizeof(seg_t)+2]; 
+	char buf[sizeof(seg_t)+2]; 
 	char c;
 	int idx = 0;
 	// state can be 0,1,2,3; 
@@ -99,7 +93,6 @@ int snp_recvseg(int connection, seg_t* segPtr)
 	// 4 '#' received, finish receiving segment 
 	int state = 0; 
 	while(recv(connection,&c,1,0)>0) {
-		//printf("snp_recvseg\n");
 		if (state == 0) {
 		        if(c=='!')
 				state = 1;
@@ -127,10 +120,10 @@ int snp_recvseg(int connection, seg_t* segPtr)
 				idx++;
 				state = 0;
 				idx = 0;
-				if(seglostTemp()>0) {
-                	printf("seg lost!!!\n");
-                	continue;
-            	}
+				if(seglost(segPtr)>0) {
+                    printf("seg lost!!!\n");
+                    continue;
+                }
 				memcpy(segPtr,buf,sizeof(seg_t));
 				return 1;
 			}
@@ -145,9 +138,7 @@ int snp_recvseg(int connection, seg_t* segPtr)
 			}
 		}
 	}
-	fflush(stdout);
-	return -1;
-}
+	return -1;}
 
 int seglost(seg_t* segPtr) {
 	int random = rand()%100;
@@ -173,14 +164,7 @@ int seglost(seg_t* segPtr) {
 	return 0;
 
 }
-//if lost, return 1; otherwise return 0
-int seglostTemp() {
-	int random = rand()%100;
-	if(random<0.2*100)
-		return 1;
-	else
-		return 0;
-}
+
 //
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

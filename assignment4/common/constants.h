@@ -23,11 +23,25 @@
 #define FIN_TIMEOUT 100000000
 //SYN_TIMEOUT value in mili seconds
 #define FIN_TIMEOUT_MS FIN_TIMEOUT/1000000
-#define LOOP_WAITING_TIME 1000
 //max number of SYN retransmissions in srt_client_connect()
 #define SYN_MAX_RETRY 5
 //max number of FIN retransmission in srt_client_disconnect()
 #define FIN_MAX_RETRY 5
 //server close wait timeout value in seconds
-#define CLOSEWAIT_TIME 1
+#define CLOSEWAIT_TIMEOUT 1
+//sendBuf_timer thread's polling interval in nanoseconds
+#define SENDBUF_POLLING_INTERVAL 100000000
+//srt client polls the receive buffer with this time interval in order 
+//to check if requested data is available in srt_srv_recv() function
+//in seconds
+#define RECVBUF_POLLING_INTERVAL 1
+//srt_svr_accept() function uses this interval in nanoseconds to busy wait on the tcb state
+#define ACCEPT_POLLING_INTERVAL 100000000
+//size of receive buffer
+#define RECEIVE_BUF_SIZE 1000000
+//DATA segment timeout value in microseconds
+#define DATA_TIMEOUT 1000
+//GBN window size
+#define GBN_WINDOW 10
+#define LOOP_WAITING_TIME 1000
 #endif

@@ -102,7 +102,7 @@ int get_new_server_socket(int server_port){
 	return serverCount;
 }
 svr_tcb_t * get_server_fron_port(int port_num){
-	printf("get_server_fron_port\n");
+	printf("get_server_fron_port for port %d \n", port_num);
 	for(int i = 0 ; i < MAX_TRANSPORT_CONNECTIONS ; i++){
 		if(servers[i] != NULL && servers[i]->svr_portNum == port_num){
 			fflush(stdout);
@@ -219,7 +219,7 @@ int srt_server_close(int sockfd)
 void *closewait_timeout(void *server_args){
 	svr_tcb_t *server = (svr_tcb_t *) server_args;
 	if(server){
-		sleep(CLOSEWAIT_TIME);
+		sleep(CLOSEWAIT_TIMEOUT);
 		server->state = CLOSED;
 	}
 }

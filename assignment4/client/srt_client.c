@@ -17,6 +17,8 @@
 #include <time.h>
 #include <pthread.h>
 #include <strings.h>
+#include <string.h>
+#include <assert.h>
 #include "srt_client.h"
 
 //
@@ -67,11 +69,12 @@ void reset_clients(){
 		}
 		clients[i] = NULL;
 	}
+	printf("reset_clients ends\n");
 	fflush(stdout);
 }
 
 client_tcb_t * get_client_from_port(int port_num){
-	printf("get_client_from_port\n");
+	printf("get_client_from_port port num = %d \n", port_num);
 	for(int i = 0 ; i < MAX_TRANSPORT_CONNECTIONS ; i++){
 		if(clients[i] != NULL && clients[i]->client_portNum == port_num){
 			return clients[i];
@@ -85,9 +88,13 @@ int freeClient(int sock_fd){
 	printf("freeClient\n");
 	int result = -1;
 	if(sock_fd < MAX_TRANSPORT_CONNECTIONS){
+		printf("found\n");
+		pthread_mutex_destroy(clients[sock_fd]->bufMutex);
+        free(clients[sock_fd]->bufMutex);
 		free(clients[sock_fd]);
 		result = 1 ;
 	}
+	printf("freeClient ends \n");
 	fflush(stdout);
 	return result;
 }
@@ -99,16 +106,35 @@ int get_new_client_socket(int client_port){
 		/* checking for the first null position in array */
 		for(clientCount = 0 ; clientCount <  MAX_TRANSPORT_CONNECTIONS && clients[clientCount] != NULL; clientCount++);
 		// above for loop finished with an index which is null. It assumes that total_connection is working correctly
-		printf("new socket id allocated to - %d\n", clientCount);	
 		clients[clientCount] = (client_tcb_t *)malloc(sizeof(client_tcb_t));
 		clients[clientCount]->client_portNum = client_port;
 		clients[clientCount]->state = CLOSED;
+		clients[clientCount]->next_seqNum = 0;
+		clients[clientCount]->sendBufHead = NULL ;
+		clients[clientCount]->sendBufunSent = NULL;
+		clients[clientCount]->sendBufTail = NULL;
+		clients[clientCount]->unAck_segNum = 0;
+		clients[clientCount]->bufMutex =  (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+		assert(clients[clientCount]->bufMutex!=NULL);
+		pthread_mutex_init(clients[clientCount]->bufMutex,NULL);
+		printf("new socket id allocated to - %d for port num %d\n", clientCount, clients[clientCount]->client_portNum);	
 		//TODO set to default value 	
 	}else{
 		printf("MAX CLIENTS REACHED :- %d \n", total_connection );
 	}
 	fflush(stdout);
 	return clientCount;
+}
+
+
+int is_sock_fd_valid(int sockfd){
+	printf("is_sock_fd_valid\n");
+	if(sockfd < 0 || sockfd > MAX_TRANSPORT_CONNECTIONS || clients[sockfd] == NULL)
+	{
+		printf("Error in validating socket sockfd = %d max clients supported = %d\n", sockfd, MAX_TRANSPORT_CONNECTIONS);
+		return 0;
+	}
+	return 1;
 }
 // This function initializes the TCB table marking all entries NULL. It also initializes 
 // a global variable for the overlay TCP socket descriptor ``conn'' used as input parameter
@@ -205,7 +231,28 @@ int srt_client_connect(int sockfd, unsigned int server_port)
  	fflush(stdout);
   return 1; // returning success it can be rechecked with state = CONNECTED
 }
-
+/**
+* this method will add a new segment to tcb. It will take care of head and tail to point to proper location. 
+* It will also add proper sequence number to each segments and will update the next seq number in client tcb
+* sequence number of segment passed would be the current seq number of client tcb
+* nextSeq number would be next_seqNum + length of data segment i.e newSeg->seg.header.length
+*/
+void append_segment_to_client(client_tcb_t *client, segBuf_t *newSeg){
+	printf("append_segment_to_client starts \n");
+	pthread_mutex_lock(client->bufMutex);
+	newSeg->seg.header.seq_num = client->next_seqNum;
+	client->next_seqNum += newSeg->seg.header.length;
+	if(client->sendBufHead != NULL) { // append to list
+		printf("append to list \n");
+		client->sendBufTail->next = newSeg;
+		client->sendBufTail = client->sendBufTail->next;
+	}else{ // first element of the linked list
+		printf("append to head \n");
+		client->sendBufHead = client->sendBufTail = client->sendBufunSent = newSeg;
+	}
+	pthread_mutex_unlock(client->bufMutex);
+	printf("append_segment_to_client ends \n" );
+}
 
 // Send data to a srt server. This function should use the socket ID to find the TCP entry. 
 // Then It should create segBufs using the given data and append them to send buffer linked list. 
@@ -219,9 +266,45 @@ int srt_client_connect(int sockfd, unsigned int server_port)
 //
 int srt_client_send(int sockfd, void* data, unsigned int length)
 {
-	printf("srt_client_send\n");
+	printf("srt_client_send starts for sockfd = %d \n",sockfd);
+	if(is_sock_fd_valid(sockfd))
+	{
+		printf("sock fd is valid\n");
+		client_tcb_t *client = clients[sockfd];
+		if(client){
+			printf("client is OK \n");
+		}
+		// initialize the buffer timeout thread;
+		printf("initializing the POLLING thread\n");
+		int totalSegment = length / MAX_SEG_LEN ;
+		totalSegment = (length % MAX_SEG_LEN) ? totalSegment + 1: totalSegment ;
+		printf("lenght = %d totalSegments = %d \n",length,totalSegment);
+		for(int i = 0 ; i < totalSegment ; i++){
+			printf("%d\n",i);
+			segBuf_t *newSeg = (segBuf_t *) malloc(sizeof(segBuf_t));
+			bzero(newSeg,sizeof(segBuf_t));
+			newSeg->seg.header.src_port = client->client_portNum;
+			newSeg->seg.header.dest_port = client->svr_portNum;
+			newSeg->seg.header.type = DATA;
+			if(i == totalSegment - 1 && length % MAX_SEG_LEN){
+				printf("last segment number %d is less than max length\n",i);
+				newSeg->seg.header.length = length % MAX_SEG_LEN;
+			}else{
+				newSeg->seg.header.length = MAX_SEG_LEN;
+			}
+			printf("segment length to be chunked is %d \n",newSeg->seg.header.length);
+			// now casting data to char* since segment structure has a char array
+			char *data_in_char = (char *)data;
+			// newSeg->seg.data is char of size MAX_SEG_LEN
+			// data_in_char is a an array of chars
+			memcpy(newSeg->seg.data,&data_in_char[i*MAX_SEG_LEN],newSeg->seg.header.length);
+			printf("chunked \"%s\" from full data %s\n", newSeg->seg.data , data_in_char);
+		}
+		return 1;
+	}
+	printf("srt_client_send ends\n");
     fflush(stdout);
-	return 1;
+	return -1;
 }
 
 
@@ -311,7 +394,6 @@ int srt_client_close(int sockfd)
 void *seghandler(void* arg)
 {
   printf("seghandler receive\n");
-  // int recvseg(int connection, seg_t* segPtr);
   seg_t msg ;
   client_tcb_t *client ;
   while(1){
@@ -347,6 +429,10 @@ void *seghandler(void* arg)
 
 	  		}
 	  		break;
+	  		case DATAACK: {
+
+	  		}
+	  		break;
 	  	}
     }else{
   		printf("client TCB not found for %d \n",msg.header.src_port);
@@ -365,6 +451,17 @@ void *seghandler(void* arg)
 // When the send buffer is empty, this thread terminates
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 void* sendBuf_timer(void* clienttcb)
-{
+{	
+  client_tcb_t *client = (client_tcb_t *) clienttcb ;	
+  while(client->sendBufHead){
+  		wait_for_some_time(SENDBUF_POLLING_INTERVAL);
+  		printf("POLLING sendBuf_timer\n");
+  		long currentTime = current_time_millis();
+  		long diff = currentTime - client->sendBufHead->sentTime;
+  		if(diff >= DATA_TIMEOUT){
+  			printf("TIMEOUT for sent-but-unAcked\n");
+  		}
+  		// resend all 	
+  }
   return 0;
 }

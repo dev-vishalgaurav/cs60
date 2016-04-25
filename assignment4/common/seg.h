@@ -133,5 +133,4 @@ unsigned short checksum(seg_t* segment);
 //return 1 if the checksum is valid,
 //return -1 if the checksum is invalid
 int checkchecksum(seg_t* segment);
-int seglostTemp() ;
 #endif

@@ -44,7 +44,7 @@
 //
 int snp_sendseg(int connection, seg_t* segPtr)
 {
-  printf("snp_sendseg connection = %d, client_port = %d, server_port = %d \n", connection, segPtr->header.src_port, segPtr->header.dest_port);
+    //printf("snp_sendseg connection = %d, client_port = %d, server_port = %d \n", connection, segPtr->header.src_port, segPtr->header.dest_port);
 	char bufstart[2];
 	char bufend[2];
 	bufstart[0] = '!';
@@ -120,10 +120,11 @@ int snp_recvseg(int connection, seg_t* segPtr)
 				idx++;
 				state = 0;
 				idx = 0;
-				if(seglost(segPtr)>0) {
+				// seg lost commented for now
+				/*if(seglost(segPtr)>0) {
                     printf("seg lost!!!\n");
                     continue;
-                }
+                }*/
 				memcpy(segPtr,buf,sizeof(seg_t));
 				return 1;
 			}

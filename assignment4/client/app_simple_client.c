@@ -106,7 +106,7 @@ int main() {
       	char mydata[6] = "hello";
 	int i;
 	for(i=0;i<5;i++){
-      		srt_client_send(sockfd, mydata, 6);
+      	srt_client_send(sockfd, mydata, 6);
 		printf("send string:%s to connection 1\n",mydata);	
       	}
 	//send strings through the second connection

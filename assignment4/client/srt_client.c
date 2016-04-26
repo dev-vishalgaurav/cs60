@@ -261,7 +261,12 @@ void append_segment_to_client(client_tcb_t *client, segBuf_t *newSeg){
 		client->sendBufTail = client->sendBufTail->next;
 	}else{ // first element of the linked list
 		printf("append to head \n");
-		client->sendBufHead = client->sendBufTail = client->sendBufunSent = newSeg;
+		client->sendBufHead = newSeg;
+		client->sendBufTail = newSeg ;
+		client->sendBufunSent = newSeg;
+	}
+	if(client->sendBufunSent == NULL){
+		client->sendBufunSent = newSeg;
 	}
 	pthread_mutex_unlock(client->bufMutex);
 	printf("append_segment_to_client ends \n" );
@@ -323,7 +328,7 @@ void free_unack_segments(client_tcb_t *client, int ack_seq_number){
 void send_unsent_segments(client_tcb_t *client){
 	pthread_mutex_lock(client->bufMutex);
 	printf("send_unsent_segments starts \n");
-	while(client->sendBufunSent && client->unAck_segNum < GBN_WINDOW){
+	while(client->sendBufunSent!=NULL && client->unAck_segNum < GBN_WINDOW){
 		// 1. send the segment
 		// 2. check if it was succesfull
 		// 3. update the sent time 
@@ -339,6 +344,7 @@ void send_unsent_segments(client_tcb_t *client){
 				pthread_create(&timeout_thread,NULL,sendBuf_timer, (void*)client);
 			}
 			client->unAck_segNum++;
+			printf("UNACKED count = %d \n", client->unAck_segNum);
 		}else{
 			printf("ERROR (send_unsent_segments) in snp_sendseg exiting TCP error \n");
 			exit(-1);
@@ -372,7 +378,7 @@ void handle_timeout_resend(client_tcb_t *client){
 	segBuf_t *head = client->sendBufHead;
 	while(head && unack_count < client->unAck_segNum){
 		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
-			printf("DATA PACKET RESENT sequence number %d sent to server \n",head->seg.header.seq_num);
+			printf("DATA PACKET RESENT sequence number %d sent to server total UNACKED =  %d \n",head->seg.header.seq_num, client->unAck_segNum );
 			head->sentTime = current_time_millis();
 			head = head->next;
 			unack_count++;

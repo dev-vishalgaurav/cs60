@@ -193,6 +193,7 @@ int srt_server_accept(int sockfd)
 //
 int srt_server_recv(int sockfd, void* buf, unsigned int length)
 {
+  
   return 0;
 }
 
@@ -265,7 +266,11 @@ void handle_fin_recieve(svr_tcb_t *server, seg_t *msg){
 	printf("FINACK sent\n");
 	printf("handle_fin_recieve ends \n");
 }
+void handle_data_recieve(svr_tcb_t *server, seg_t *msg){
+	printf("handle_data_receive starts\n");
 
+	printf("handle_data_receive ends\n" );
+}
 // This is a thread  started by srt_server_init(). It handles all the incoming 
 // segments from the client. The design of seghanlder is an infinite loop that calls snp_recvseg(). If
 // snp_recvseg() fails then the overlay connection is closed and the thread is terminated. Depending
@@ -300,6 +305,11 @@ printf("seghandler receive\n");
   			case FIN:{
   				printf("FIN received\n");
   				handle_fin_recieve(server,&msg);
+  			}
+  			break;
+  			case DATA:{
+  				printf("DATA received\n");
+  				handle_data_recieve(server,&msg);
   			}
   			break;
   		}

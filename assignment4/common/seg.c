@@ -138,7 +138,8 @@ int snp_recvseg(int connection, seg_t* segPtr)
 			}
 		}
 	}
-	return -1;}
+	return -1;
+}
 
 int seglost(seg_t* segPtr) {
 	int random = rand()%100;

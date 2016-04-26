@@ -114,11 +114,11 @@ int get_new_client_socket(int client_port){
 		clients[clientCount]->sendBufunSent = NULL;
 		clients[clientCount]->sendBufTail = NULL;
 		clients[clientCount]->unAck_segNum = 0;
-		clients[clientCount]->bufMutex =  (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+		pthread_mutex_t *mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
+		pthread_mutex_init(mutex,NULL);
+		clients[clientCount]->bufMutex =  mutex;
 		assert(clients[clientCount]->bufMutex!=NULL);
-		pthread_mutex_init(clients[clientCount]->bufMutex,NULL);
 		printf("new socket id allocated to - %d for port num %d\n", clientCount, clients[clientCount]->client_portNum);	
-		//TODO set to default value 	
 	}else{
 		printf("MAX CLIENTS REACHED :- %d \n", total_connection );
 	}
@@ -254,6 +254,7 @@ void append_segment_to_client(client_tcb_t *client, segBuf_t *newSeg){
 	pthread_mutex_lock(client->bufMutex);
 	newSeg->seg.header.seq_num = client->next_seqNum;
 	client->next_seqNum += newSeg->seg.header.length;
+	printf("NEXT SEQ number = %d \n", client->next_seqNum);
 	if(client->sendBufHead != NULL) { // append to list
 		printf("append to list \n");
 		client->sendBufTail->next = newSeg;
@@ -265,7 +266,123 @@ void append_segment_to_client(client_tcb_t *client, segBuf_t *newSeg){
 	pthread_mutex_unlock(client->bufMutex);
 	printf("append_segment_to_client ends \n" );
 }
-
+/**
+* function to manage syn ack from server
+*/
+void handle_syn_ack(client_tcb_t *client){
+	pthread_mutex_lock(client->bufMutex);
+	printf("handle_syn_ack starts\n");
+	if(client->state == SYNSENT){
+		printf("CONNECTED\n");
+		client->state = CONNECTED;
+	}else{
+		printf("ALREADY CONNECTED\n");
+	}
+	printf("handle_syn_ack ends\n");
+	pthread_mutex_unlock(client->bufMutex);
+	fflush(stdout);
+}
+/**
+* function to manage fin ack from server
+*/
+void handle_fin_ack(client_tcb_t *client){
+	pthread_mutex_lock(client->bufMutex);
+	printf("handle_fin_ack starts\n");
+	if(client->state == FINWAIT){
+	  	printf("CLOSED\n");
+	  	client->state = CLOSED;
+	}else{
+		printf("NOT CLOSED\n");
+	}
+	printf("handle_fin_ack ends\n");
+	pthread_mutex_unlock(client->bufMutex);
+	fflush(stdout);
+}
+/**
+* function to free all unAcked segments less than the passed segment number. It assumes that it is called with a mutex lock
+*/
+void free_unack_segments(client_tcb_t *client, int ack_seq_number){
+	printf("free_unack_segments \n");
+	segBuf_t *head = client->sendBufHead;
+	while(head != NULL && head->seg.header.seq_num < ack_seq_number){
+		segBuf_t *temp = head;
+		head = head->next;
+		free(temp);
+		client->unAck_segNum--;
+	}
+	if(head == NULL){ // it terminated because there is no segment to free
+		printf(" HEAD became NULL hence no segments set tail to NULL\n");
+		client->sendBufTail = NULL;
+	}
+	printf("free_unack_segments ends\n");
+	fflush(stdout);
+}
+/**
+* 
+*/
+void send_unsent_segments(client_tcb_t *client){
+	pthread_mutex_lock(client->bufMutex);
+	printf("send_unsent_segments starts \n");
+	while(client->sendBufunSent && client->unAck_segNum < GBN_WINDOW){
+		// 1. send the segment
+		// 2. check if it was succesfull
+		// 3. update the sent time 
+		// 4. start the timeout thread if required which means client->unAck_segNum should be zero 
+		// 5. switch to next segment
+		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
+			printf("DATA PACKET SENT sequence number %d sent to server \n",client->sendBufunSent->seg.header.seq_num);
+			client->sendBufunSent->sentTime = current_time_millis();
+			client->sendBufunSent = client->sendBufunSent->next;
+			if(client->unAck_segNum == 0) { // check 
+				printf("TIMEOUT thread create called\n");
+				pthread_t timeout_thread;
+				pthread_create(&timeout_thread,NULL,sendBuf_timer, (void*)client);
+			}
+			client->unAck_segNum++;
+		}else{
+			printf("ERROR (send_unsent_segments) in snp_sendseg exiting TCP error \n");
+			exit(-1);
+		}
+	}
+	pthread_mutex_unlock(client->bufMutex);
+	printf("send_unsent_segments ends \n");
+	fflush(stdout);
+}
+/**
+* function to manage data ack from server
+*/
+void handle_data_ack(client_tcb_t *client, seg_t *msg){
+	if(client->state == CONNECTED){
+		pthread_mutex_lock(client->bufMutex);
+		printf("handle_data_ack starts\n");
+		free_unack_segments(client,msg->header.seq_num);
+		printf("handle_data_ack ends\n");
+		pthread_mutex_lock(client->bufMutex);
+	}else{
+		printf("ERROR in DATAACK. received data ack in UNCONNECTED state\n");
+	}
+	fflush(stdout);
+}
+/**
+*
+*/
+void handle_timeout_resend(client_tcb_t *client){
+	printf("handle_timeout_resend starts\n");
+	int unack_count = 0 ;
+	segBuf_t *head = client->sendBufHead;
+	while(head && unack_count < client->unAck_segNum){
+		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
+			printf("DATA PACKET RESENT sequence number %d sent to server \n",head->seg.header.seq_num);
+			head->sentTime = current_time_millis();
+			head = head->next;
+			unack_count++;
+		}else{
+			printf("ERROR (handle_timeout_resend) in snp_sendseg exiting TCP error \n");
+			exit(-1);
+		}
+	}
+	printf("handle_timeout_resend ends\n");
+}
 // Send data to a srt server. This function should use the socket ID to find the TCP entry. 
 // Then It should create segBufs using the given data and append them to send buffer linked list. 
 // If the send buffer was empty before insertion, a thread called sendbuf_timer 
@@ -286,8 +403,7 @@ int srt_client_send(int sockfd, void* data, unsigned int length)
 		if(client){
 			printf("client is OK \n");
 		}
-		// initialize the buffer timeout thread;
-		printf("initializing the POLLING thread\n");
+		//pthread_mutex_lock(client->bufMutex);
 		int totalSegment = length / MAX_SEG_LEN ;
 		totalSegment = (length % MAX_SEG_LEN) ? totalSegment + 1: totalSegment ;
 		printf("lenght = %d totalSegments = %d \n",length,totalSegment);
@@ -313,6 +429,8 @@ int srt_client_send(int sockfd, void* data, unsigned int length)
 			//printf("chunked \"%s\" from full data %s\n", newSeg->seg.data , data_in_char);
 			append_segment_to_client(client,newSeg);
 		}
+		send_unsent_segments(client);
+		//pthread_mutex_unlock(client->bufMutex);
 		//printBuffer(client)
 		return 1;
 	}
@@ -396,120 +514,7 @@ int srt_client_close(int sockfd)
   	fflush(stdout);
 	return freeClient(sockfd);
 }
-/**
-* function to manage syn ack from server
-*/
-void handle_syn_ack(client_tcb_t *client){
-	pthread_mutex_lock(client->bufMutex);
-	printf("handle_syn_ack starts\n");
-	if(client->state == SYNSENT){
-		printf("CONNECTED\n");
-		client->state = CONNECTED;
-	}else{
-		printf("ALREADY CONNECTED\n");
-	}
-	printf("handle_syn_ack ends\n");
-	pthread_mutex_unlock(client->bufMutex);
-	fflush(stdout);
-}
-/**
-* function to manage fin ack from server
-*/
-void handle_fin_ack(client_tcb_t *client){
-	pthread_mutex_lock(client->bufMutex);
-	printf("handle_fin_ack starts\n");
-	if(client->state == FINWAIT){
-	  	printf("CLOSED\n");
-	  	client->state = CLOSED;
-	}else{
-		printf("NOT CLOSED\n");
-	}
-	printf("handle_fin_ack ends\n");
-	pthread_mutex_unlock(client->bufMutex);
-	fflush(stdout);
-}
-/**
-* function to free all unAcked segments less than the passed segment number. It assumes that it is called with a mutex lock
-*/
-void free_unack_segments(client_tcb_t *client, int ack_seq_number){
-	printf("free_unack_segments \n");
-	segBuf_t *head = client->sendBufHead;
-	while(head != NULL && head->seg.header.seq_num < ack_seq_number){
-		segBuf_t *temp = head;
-		head = head->next;
-		free(temp);
-		client->unAck_segNum--;
-	}
-	if(head == NULL){ // it terminated because there is no segment to free
-		printf(" HEAD became NULL hence no segments set tail to NULL\n");
-		client->sendBufTail = NULL;
-	}
-	printf("free_unack_segments ends\n");
-	fflush(stdout);
-}
-/**
-* 
-*/
-void send_unsent_segments(client_tcb_t *client){
-	printf("send_unsent_segments starts \n");
-	while(client->sendBufunSent && client->unAck_segNum < GBN_WINDOW){
-		// 1. send the segment
-		// 2. check if it was succesfull
-		// 3. update the sent time 
-		// 4. start the timeout thread if required which means client->unAck_segNum should be zero 
-		// 5. switch to next segment
-		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
-			printf("DATA PACKET SENT sequence number %d sent to server \n",client->sendBufunSent->seg.header.seq_num);
-			client->sendBufunSent->sentTime = current_time_millis();
-			client->sendBufunSent = client->sendBufunSent->next;
-			if(client->unAck_segNum == 0) { // check 
-				printf("TIMEOUT thread create called\n");
-				pthread_t timeout_thread;
-				pthread_create(&timeout_thread,NULL,sendBuf_timer, (void*)client);
-			}
-			client->unAck_segNum++;
-		}else{
-			printf("ERROR (send_unsent_segments) in snp_sendseg exiting TCP error \n");
-			exit(-1);
-		}
-	}
-	printf("send_unsent_segments ends \n");
-}
-/**
-* function to manage data ack from server
-*/
-void handle_data_ack(client_tcb_t *client, seg_t *msg){
-	if(client->state == CONNECTED){
-		pthread_mutex_lock(client->bufMutex);
-		printf("handle_data_ack starts\n");
-		free_unack_segments(client,msg->header.seq_num);
-		printf("handle_data_ack ends\n");
-		pthread_mutex_lock(client->bufMutex);
-	}else{
-		printf("ERROR in DATAACK. received data ack in UNCONNECTED state\n");
-	}
-	fflush(stdout);
-}
-/**
-*
-*/
-void handle_timeout_resend(client_tcb_t *client){
-	printf("handle_timeout_resend starts\n");
-	int unack_count = 0 ;
-	segBuf_t *head = client->sendBufHead;
-	while(head && unack_count < client->unAck_segNum){
-		if(snp_sendseg(mainTcpSockId,(seg_t*)client->sendBufunSent)){
-			printf("DATA PACKET RESENT sequence number %d sent to server \n",head->seg.header.seq_num);
-			head->sentTime = current_time_millis();
-			head = head->next;
-			unack_count++;
-		}else{
-			printf("ERROR (handle_timeout_resend) in snp_sendseg exiting TCP error \n");
-			exit(-1);
-		}
-	}
-	printf("handle_timeout_resend ends\n");
-}
+
 // This is a thread  started by srt_client_init(). It handles all the incoming 
 // segments from the server. The design of seghanlder is an infinite loop that calls snp_recvseg(). If
 // snp_recvseg() fails then the overlay connection is closed and the thread is terminated. Depending
@@ -527,7 +532,6 @@ void *seghandler(void* arg)
   		printf("client recvseg return negative hence exiting\n");
   		printf("exiting thread and closing main tcp connection\n");
   		fflush(stdout);
-  		close(mainTcpSockId);
 		pthread_exit(NULL);
   	}
   	printf("seghandler message received \n");

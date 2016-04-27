@@ -12,7 +12,7 @@ stress: client/app_stress_client.o server/app_stress_server.o client/srt_client.
 client/app_simple_client.o: client/app_simple_client.c 
 	gcc -pthread -g -c client/app_simple_client.c -o client/app_simple_client.o -fno-stack-protector
 server/app_simple_server.o: server/app_simple_server.c 
-	gcc -pthread -g -c server/app_simple_server.c -o server/app_simple_server.o-fno-stack-protector
+	gcc -pthread -g -c server/app_simple_server.c -o server/app_simple_server.o -fno-stack-protector
 
 client/app_stress_client.o: client/app_stress_client.c 
 	gcc -pthread -g -c client/app_stress_client.c -o client/app_stress_client.o -fno-stack-protector

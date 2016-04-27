@@ -267,6 +267,7 @@ void *closewait_timeout(void *server_args){
 void handle_syn_recieve(svr_tcb_t *server, seg_t *msg){
 	printf("handle_syn_recieve \n");
 	if(server->state == LISTENING){
+		printf("server state changed in CONNECTED in seghandler \n");
 		server->state = CONNECTED;
 		server->client_portNum = msg->header.src_port; // update client port
 	}

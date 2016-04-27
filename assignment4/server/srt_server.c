@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 #include "srt_server.h"
 #include "../common/constants.h"
 #include "srt_server.h"
@@ -93,6 +94,15 @@ int get_new_server_socket(int server_port){
 		servers[serverCount] = (svr_tcb_t *)malloc(sizeof(svr_tcb_t));
 		servers[serverCount]->svr_portNum = server_port;
 		servers[serverCount]->state = CLOSED;
+		/* create a new mutex and assign it to server tcb */
+		pthread_mutex_t *mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
+		pthread_mutex_init(mutex,NULL);
+		servers[serverCount]->bufMutex =  mutex;
+		char* dataBuffer;
+		dataBuffer = (char*) malloc(RECEIVE_BUF_SIZE);
+		servers[serverCount]->recvBuf = dataBuffer;
+		bzero(dataBuffer, RECEIVE_BUF_SIZE);
+		servers[serverCount]->usedBufLen = 0 ; // currently 0 size is used.
 		//TODO set to default value 	
 	}else{
 		printf("MAX CLIENTS REACHED :- %d \n", total_connection );
@@ -193,8 +203,37 @@ int srt_server_accept(int sockfd)
 //
 int srt_server_recv(int sockfd, void* buf, unsigned int length)
 {
-  
-  return 0;
+	printf("srt_server_recv starts \n");
+	if(sockfd < 0 || sockfd > MAX_TRANSPORT_CONNECTIONS || servers[sockfd] == NULL){
+		printf("Error in srt_server_close sockfd = %d max clients supported = %d\n", sockfd, MAX_TRANSPORT_CONNECTIONS);
+		return -1;
+	}
+	svr_tcb_t *server = servers[sockfd];
+	if(server->state == CONNECTED){
+		while(server->usedBufLen < length){
+			printf("DATA not available in BUFFER usedBuffer length = %d and required length = %d\n",server->usedBufLen,length);
+			sleep(RECVBUF_POLLING_INTERVAL); // polling time is in seconds
+		}
+		printf(" DATA AVAILABLE usedBuffer length = %d and required length = %d\n",server->usedBufLen,length);
+		pthread_mutex_lock(server->bufMutex);
+		char *clientBuffer = (char *) buf;
+		// copy current buffer of required length to user buffer. 
+		memcpy(clientBuffer,server->recvBuf,length);
+		// calculate the remaining array to be shifted recvBuffer
+		int remainingBufLength = server->usedBufLen - length;
+		char *address_start =  server->recvBuf + length ;
+		// copy remaining buffer to the start of recvBuffer
+		memcpy(server->recvBuf,address_start,remainingBufLength);
+		// should i do bzero for unused buffer
+		// update the remaining buffer length 
+		server->usedBufLen = remainingBufLength;
+		pthread_mutex_unlock(server->bufMutex);
+	}else{
+		printf("SERVER is NOT CONNECTED hence returning error\n");
+		return -1 ;
+	}
+	printf("srt_server_recv ends \n");
+  	return 1;
 }
 
 
@@ -237,6 +276,8 @@ void handle_syn_recieve(svr_tcb_t *server, seg_t *msg){
 	segment.header.dest_port = msg->header.src_port;
 	segment.header.type = SYNACK;
 	segment.header.length = 0;
+
+	server->expect_seqNum = msg->header.seq_num; // update the expected sequence number according to header 
 	//  first trial
 	if(snp_sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
 		printf("Error in sending message sockfd = %d \n", mainTcpSockId);
@@ -268,7 +309,36 @@ void handle_fin_recieve(svr_tcb_t *server, seg_t *msg){
 }
 void handle_data_recieve(svr_tcb_t *server, seg_t *msg){
 	printf("handle_data_receive starts\n");
-
+	if(server->state == CONNECTED){
+		seg_t segment;
+		bzero(&segment,sizeof(segment));
+		segment.header.src_port = msg->header.dest_port;
+		segment.header.dest_port = msg->header.src_port;
+		segment.header.type = DATAACK;
+		segment.header.length = 0;
+		printf("LOCKING ...\n");
+		pthread_mutex_lock(server->bufMutex);
+		printf("expected seq number = %d ...\n", server->expect_seqNum);
+		if(server->expect_seqNum == msg->header.seq_num){
+			printf("PACKET ACCEPTED..\n");
+			/* save the data and update expected sequnce number and used buffer length */
+			// copy in recvBuffer from usedBufLen to segment length 
+			memcpy(&server->recvBuf[server->usedBufLen],msg->data,msg->header.length);
+			server->usedBufLen += msg->header.length;
+			server->expect_seqNum = server->expect_seqNum + msg->header.length;
+		}else{
+			printf("PACKET IS DROPPED ..,\n");
+		}
+		printf("next expected seq number = %d ...\n", server->expect_seqNum);
+		segment.header.ack_num = server->expect_seqNum;
+		printf("UNLOCKING ...\n");
+		pthread_mutex_unlock(server->bufMutex);
+		if(snp_sendseg(mainTcpSockId,&segment) < 0){ // error check for sendseg when there is TCP socket error
+			printf("Error in sending DATAACK to sockfd = %d \n", mainTcpSockId);
+		}
+	}else{
+		printf("ERROR server is not connected\n");
+	}
 	printf("handle_data_receive ends\n" );
 }
 // This is a thread  started by srt_server_init(). It handles all the incoming 

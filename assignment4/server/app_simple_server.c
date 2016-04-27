@@ -93,18 +93,20 @@ int main() {
 	srt_server_accept(sockfd2);
 
 
-	char buf1[6];
-	char buf2[7];
+	char buf1[100];
+	char buf2[100];
 	int i;
 	//receive strings from first connection
 	for(i=0;i<5;i++) {
 		srt_server_recv(sockfd,buf1,6);
 		printf("recv string: %s from connection 1\n",buf1);
+		bzero(buf1,7);
 	}
 	//receive strings from second connection
 	for(i=0;i<5;i++) {
 		srt_server_recv(sockfd2,buf2,7);
 		printf("recv string: %s from connection 2\n",buf2);
+		bzero(buf2,8);
 	}
 
 

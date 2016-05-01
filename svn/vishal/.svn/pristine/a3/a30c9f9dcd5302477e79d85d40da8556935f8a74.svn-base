@@ -37,3 +37,12 @@ ones) that have been left empty (i.e. they just return immediately).
 
 
 NOTE FOR TA
+
+	1. commands to run 
+
+		make clean
+		make
+
+	2. I have tested this code in local mahine using separate terminals and also by running server on flume and sending data from terminal in client.
+
+

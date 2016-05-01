@@ -9,11 +9,38 @@
 //       April 26, 2008 **Added checksum descriptions**
 //
 
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <string.h>
-#include <stdio.h>
-#include "seg.h"
+#ifndef SEG_H
+#define SEG_H
+
+#include "constants.h"
+
+//Segment type definition. Used by SRT.
+#define	SYN 0
+#define	SYNACK 1
+#define	FIN 2
+#define	FINACK 3
+#define	DATA 4
+#define	DATAACK 5
+
+//segment header definition. 
+
+typedef struct srt_hdr {
+	unsigned int src_port;        //source port number
+	unsigned int dest_port;       //destination port number
+	unsigned int seq_num;         //sequence number
+	unsigned int ack_num;         //ack number
+	unsigned short int length;    //segment data length
+	unsigned short int  type;     //segment type
+	unsigned short int  rcv_win;  //currently not used
+	unsigned short int checksum;  //checksum for this segment
+} srt_hdr_t;
+
+//segment definition
+
+typedef struct segment {
+	srt_hdr_t header;
+	char data[MAX_SEG_LEN];
+} seg_t;
 
 //
 //
@@ -31,6 +58,8 @@
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
 
+int snp_sendseg(int connection, seg_t* segPtr);
+
 // Send a SRT segment over the overlay network (this is simply a single TCP connection in the
 // case of Lab3). TCP sends data as a byte stream. In order to send segments over the overlay TCP connection, 
 // delimiters for the start and end of the packet must be added to the transmission. 
@@ -42,34 +71,8 @@
 //
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
-int snp_sendseg(int connection, seg_t* segPtr)
-{	
-	/**
-	* calculate the checksum and set it to 
-	*/
-    //printf("snp_sendseg connection = %d, client_port = %d, server_port = %d \n", connection, segPtr->header.src_port, segPtr->header.dest_port);
-	char bufstart[2];
-	char bufend[2];
-	bufstart[0] = '!';
-	bufstart[1] = '&';
-	bufend[0] = '!';
-	bufend[1] = '#';
-	if (send(connection, bufstart, 2, 0) < 0) {
-		return -1;
-	}
-	//reset the checksum variable and set it to 0;
-    segPtr->header.checksum = 0;
-	segPtr->header.checksum = checksum(segPtr);
-	printf("CHECKSUM = %d \n", segPtr->header.checksum );
-	if(send(connection,segPtr,sizeof(seg_t),0)<0) {
-		return -1;
-	}
-	if(send(connection,bufend,2,0)<0) {
-		return -1;
-	}
-	return 1;
-}
 
+int snp_recvseg(int connection, seg_t* segPtr);
 
 // Receive a segment over overlay network (this is a single TCP connection in the case of
 // Lab3). We recommend that you receive one byte at a time using recv(). Here you are looking for 
@@ -79,89 +82,25 @@ int snp_sendseg(int connection, seg_t* segPtr)
 // be seen in the data in the segment. You should read in one byte as a char at 
 // a time and copy the data part into a buffer to be returned to the caller.
 //
-// IMPORTANT: once you have parsed a segment you should call seglost(). The code
-// for seglost(seg_t* segment) is provided for you below snp_recvseg().
+// IMPORTANT: once you have parsed a segment you should call seglost(). Here is the code
+// for seglost(seg_t* segment):
 // 
 // a segment has PKT_LOST_RATE probability to be lost or invalid checksum
 // with PKT_LOST_RATE/2 probability, the segment is lost, this function returns 1
 // if the segment is not lost, return 0 
 // Even the segment is not lost, the packet has PKT_LOST_RATE/2 probability to have invalid checksum
 //  We flip  a random bit in the segment to create invalid checksum
-int snp_recvseg(int connection, seg_t* segPtr)
-{
-	char buf[sizeof(seg_t)+2]; 
-	char c;
-	int idx = 0;
-	// state can be 0,1,2,3; 
-	// 0 starting point 
-	// 1 '!' received
-	// 2 '&' received, start receiving segment
-	// 3 '!' received,
-	// 4 '#' received, finish receiving segment 
-	int state = 0; 
-	while(recv(connection,&c,1,0)>0) {
-		if (state == 0) {
-		        if(c=='!')
-				state = 1;
-		}
-		else if(state == 1) {
-			if(c=='&') 
-				state = 2;
-			else
-				state = 0;
-		}
-		else if(state == 2) {
-			if(c=='!') {
-				buf[idx]=c;
-				idx++;
-				state = 3;
-			}
-			else {
-				buf[idx]=c;
-				idx++;
-			}
-		}
-		else if(state == 3) {
-			if(c=='#') {
-				buf[idx]=c;
-				idx++;
-				state = 0;
-				idx = 0;
-				// seg lost commented for now
-				if(seglost(segPtr)>0) {
-                    printf("seg lost!!!\n");
-                    continue;
-                }
-                int checksum = checkchecksum(segPtr);
-                printf("CHECKCHECKSUM = %d \n", checksum );
-                if(checkchecksum < 0 ) {
-                    printf("ERROR in getting CHECKSUM!\n");
-                    continue;
-                }
-				memcpy(segPtr,buf,sizeof(seg_t));
-				return 1;
-			}
-			else if(c=='!') {
-				buf[idx]=c;
-				idx++;
-			}
-			else {
-				buf[idx]=c;
-				idx++;
-				state = 2;
-			}
-		}
-	}
-	return -1;
-}
-
+int seglost(seg_t* segPtr); 
+// source code for seglost
+// copy this to seg.c
+/*
 int seglost(seg_t* segPtr) {
 	int random = rand()%100;
 	if(random<PKT_LOSS_RATE*100) {
 		//50% probability of losing a segment
 		if(rand()%2==0) {
 			printf("seg lost!!!\n");
-      return 1;
+                        return 1;
 		}
 		//50% chance of invalid checksum
 		else {
@@ -179,7 +118,7 @@ int seglost(seg_t* segPtr) {
 	return 0;
 
 }
-
+*/
 //
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -188,47 +127,10 @@ int seglost(seg_t* segPtr) {
 //you should first clear the checksum field in segment header to be 0
 //if the data has odd number of octets, add an 0 octets to calculate checksum
 //use 1s complement for checksum calculation
-// code taken from 
-// http://www.rfc-editor.org/rfc/rfc1071.txt
-unsigned short int checksum(seg_t* segment)
-{	
-	register long checksum = 0;
-    unsigned int D = 0;
-    
-    //convert into 16 bits format "divides D into 16-bits-long values, and adds all these 16-bits-long values"
-    unsigned short* byteAddress = (unsigned short*)segment;
-    
-    //add a byte of 0 if odd number
-	if(segment->header.length % 2 == 1) segment->data[segment->header.length] = 0;
-	// Denote the data from which the checksum is calculated as D. D = segment header + segment data.
-	D = sizeof(srt_hdr_t) + segment->header.length;
-	if(D % 2 == 1) {
-        D++; //If size of D (in bytes) is an odd number, append a byte with all bits set as 0 to D
-    }
-    // http://www.rfc-editor.org/rfc/rfc1071.txt following the checksum logic mentioned in RFC 
-	D = D / 2;
-	 /* Compute Internet Checksum for "count" bytes
-      *         beginning at location "addr".
-      */
-    while(D > 0){
-        checksum += *byteAddress++;
-        if(checksum & 0x10000) {
-            checksum = (checksum & 0xFFFF) + 1;
-        }
-        D--;
-    }
-    
-	return ~checksum;
-}
+unsigned short checksum(seg_t* segment);
 
 //check the checksum in the segment,
 //return 1 if the checksum is valid,
 //return -1 if the checksum is invalid
-// code taken from 
-// http://www.rfc-editor.org/rfc/rfc1071.txt
-int checkchecksum(seg_t* segment)
-{
-	register long checksum_result = checksum(segment);
-    // calculate the return value 1 or -1
-    return (~checksum_result) == 0 ? 1 : -1 ;
-}
+int checkchecksum(seg_t* segment);
+#endif

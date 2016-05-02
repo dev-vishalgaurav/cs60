@@ -19,6 +19,7 @@
 #include <signal.h>
 #include <sys/utsname.h>
 #include <assert.h>
+#include "../common/constants.h"
 
 
 //this function returns node ID of the given hostname
@@ -39,6 +40,19 @@ int topology_getNodeIDfromname(char* hostname)
   return ipAddr & 0x000000FF; // to get the last digit od ip address mask it with 0.0.0.255 :D 
 }
 
+void get_ip_from_host_name(char* hostname,in_addr_t *ip){
+	//printf("get_ip_from_host_name starts\n");
+	struct hostent *hostInfo;
+	hostInfo = gethostbyname2(hostname,AF_INET);
+	if(!hostInfo) {
+  		printf("error in getting host name from string!\n");
+  		return;
+  	}
+  	printf("%s\n", (char *) hostInfo->h_addr_list[0]  );
+  	memcpy((char *) ip, hostInfo->h_addr_list[0], hostInfo->h_length);
+  	printf("get_ip_from_host_name ends value = %s\n",(char *) ip);
+  	return ;
+}
 //this function returns node ID from the given IP address
 //if the node ID can't be retrieved, return -1
 int topology_getNodeIDfromip(struct in_addr* addr)
@@ -71,7 +85,7 @@ int topology_getNbrNum()
 			while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
 				char *firstHost = strtok(line, " ");
 				char *secondHost = strtok(NULL, " ");
-				printf("firstHost = %s, secondHost = %s \n", firstHost, secondHost );
+				//printf("firstHost = %s, secondHost = %s \n", firstHost, secondHost );
 				int firstNodeId = topology_getNodeIDfromname(firstHost);
 				int secondNodeId = topology_getNodeIDfromname(secondHost);
 				if(firstNodeId == myNodeId || secondNodeId == myNodeId){
@@ -215,7 +229,7 @@ int* topology_getNbrArray()
 unsigned int topology_getCost(int fromNodeID, int toNodeID)
 {
   int myNodeId = topology_getMyNodeID();
-  int cost = 0 ;
+  int cost = INFINITE_COST ;
   if(myNodeId >= 0 ){
   		FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
 		if(topologyFile != NULL){
@@ -237,7 +251,7 @@ unsigned int topology_getCost(int fromNodeID, int toNodeID)
   return cost;
 }
 
-int main(){
+int main1(){
 	printf("my node id = %d\n", topology_getMyNodeID() );
 	printf("my nighbours = %d\n", topology_getNbrNum() );
 	int totalNodes = topology_getNodeNum();

@@ -104,10 +104,10 @@ int overlay_recvpkt(snp_pkt_t* pkt, int overlay_conn)
 			if(c=='#') {
 				buf[idx]=c;
 				idx++;
-				state = 0;
-				idx = 0;
-				memcpy(pkt,buf,sizeof(snp_pkt_t));
+				memcpy(pkt,buf,idx -2);
 				printf("PACKET in overlay_recvpkt received \n");
+				state = 0;
+				idx = 0 ;
 				return 1;
 			}
 			else if(c=='!') {
@@ -137,9 +137,70 @@ int overlay_recvpkt(snp_pkt_t* pkt, int overlay_conn)
 // PKTRECV -- '&' received, start receiving data
 // PKTSTOP1 -- '!' received, expecting '#' to finish receiving data
 // Return 1 if a sendpkt_arg_t structure is received successfully, otherwise return -1.
-int getpktToSend(snp_pkt_t* pkt, int* nextNode,int network_conn)
-{
-  return 0;
+int getpktToSend(snp_pkt_t* pkt, int* nextNode, int network_conn)
+{	
+  // sendpkt_arg_t required inorder to get nextNodeId 
+  sendpkt_arg_t *recvPackerArg = (sendpkt_arg_t *)malloc(sizeof(recvPackerArg));
+  char buf[sizeof(sendpkt_arg_t)+2]; 
+  char c;
+  int idx = 0;
+  // state can be 0,1,2,3; 
+  // 0 starting point 
+  // 1 '!' received
+  // 2 '&' received, start receiving segment
+  // 3 '!' received,
+  // 4 '#' received, finish receiving segment 
+  int state = 0; 
+  while(recv(network_conn,&c,1,0)>0) {
+  	if (state == 0) {
+  		if(c=='!')
+  			state = 1;
+  		}
+		else if(state == 1) {
+			if(c=='&') 
+				state = 2;
+			else
+				state = 0;
+		}
+		else if(state == 2) {
+			if(c=='!') {
+				buf[idx]=c;
+				idx++;
+				state = 3;
+			}
+			else {
+				buf[idx]=c;
+				idx++;
+			}
+		}
+		else if(state == 3) {
+			if(c=='#') {
+				buf[idx]=c;
+				idx++;
+				memcpy(recvPackerArg,buf,idx - 2);
+				*pkt = recvPackerArg->pkt;
+				*nextNode = recvPackerArg->nextNodeID;
+				state = 0;
+				idx = 0;
+				printf("PACKET recieved in getpktToSend received \n");
+				free(recvPackerArg);
+				return 1;
+			}
+			else if(c=='!') {
+				buf[idx]=c;
+				idx++;
+			}
+			else {
+				buf[idx]=c;
+				idx++;
+				state = 2;
+			}
+		}
+	}
+	
+	printf("PACKET ERROR in receiving getpktToSend \n");
+	free(recvPackerArg);
+	return -1;
 }
 
 
@@ -187,7 +248,25 @@ int forwardpktToSNP(snp_pkt_t* pkt, int network_conn)
 // Return 1 if the packet is sent successfully, otherwise return -1.
 int sendpkt(snp_pkt_t* pkt, int conn)
 {
-  return 0;
+  int result = -1;
+  if(conn >= 0 ){
+  	char startChars[2] ;
+  	startChars[0] = '!';
+  	startChars[1] = '&';
+  	char endChars[2] ;
+  	endChars[0] = '!';
+  	endChars[1] = '#';
+  	// calculating segment length = size of snp header (mandatory) + length of data mentioned in header.
+  	int segmentLength =  sizeof(snp_hdr_t) + pkt->header.length ;
+  	// all send should be success first send is start of message, middle is data and last sent is end of message
+  	if(send(conn,startChars,2 ,0) >= 0 && send(conn, pkt,segmentLength ,0) >= 0 && send(conn, endChars,2 ,0) >=  0){ 
+  		printf("PACKET sendpkt sent to conn id %d\n",conn);
+		result = 1;  // packet sending success		
+  	}else{
+  		printf("error sendpkt conn id = %d \n",conn);
+  	}
+  }
+  return result;
 }
 
 
@@ -205,8 +284,61 @@ int sendpkt(snp_pkt_t* pkt, int conn)
 // Return 1 if the packet is received successfully, otherwise return -1.
 int recvpkt(snp_pkt_t* pkt, int conn)
 {
-  return 0;
-}
+	char buf[sizeof(snp_pkt_t)+2]; 
+	char c;
+	int idx = 0;
+	// state can be 0,1,2,3; 
+	// 0 starting point 
+	// 1 '!' received
+	// 2 '&' received, start receiving segment
+	// 3 '!' received,
+	// 4 '#' received, finish receiving segment 
+	int state = 0; 
+	while(recv(conn,&c,1,0)>0) {
+		if (state == 0) {
+		        if(c=='!')
+				state = 1;
+		}
+		else if(state == 1) {
+			if(c=='&') 
+				state = 2;
+			else
+				state = 0;
+		}
+		else if(state == 2) {
+			if(c=='!') {
+				buf[idx]=c;
+				idx++;
+				state = 3;
+			}
+			else {
+				buf[idx]=c;
+				idx++;
+			}
+		}
+		else if(state == 3) {
+			if(c=='#') {
+				buf[idx]=c;
+				idx++;
+				memcpy(pkt,buf,idx -2);
+				printf("PACKET in recvpkt received \n");
+				state = 0;
+				idx = 0 ;
+				return 1;
+			}
+			else if(c=='!') {
+				buf[idx]=c;
+				idx++;
+			}
+			else {
+				buf[idx]=c;
+				idx++;
+				state = 2;
+			}
+		}
+	}
+	printf("PACKET ERROR in receiving recvpkt\n");
+	return -1;}
 
 int main(){
 	return 0 ;

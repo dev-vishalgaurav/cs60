@@ -75,8 +75,14 @@ nbr_entry_t* nt_create()
 
 //This function destroys a neighbortable. It closes all the connections and frees all the dynamically allocated memory.
 void nt_destroy(nbr_entry_t* nt)
-{
-  return;
+{	
+	int neighbors = topology_getNbrNum();
+	for (int i = 0; i < neighbors; i++) {
+        printf("closing connection %d \n", nt[i].conn );
+        close(nt[i].conn);
+    }
+    printf("freeing neighbor table\n");
+    free(nt);    
 }
 
 //This function is used to assign a TCP connection to a neighbor table entry for a neighboring node. If the TCP connection is successfully assigned, return 1, otherwise return -1

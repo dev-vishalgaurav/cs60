@@ -104,7 +104,7 @@ int overlay_recvpkt(snp_pkt_t* pkt, int overlay_conn)
 			if(c=='#') {
 				buf[idx]=c;
 				idx++;
-				memcpy(pkt,buf,idx -2);
+				memcpy(pkt,buf,sizeof(snp_pkt_t));
 				printf("PACKET in overlay_recvpkt received \n");
 				state = 0;
 				idx = 0 ;
@@ -140,7 +140,7 @@ int overlay_recvpkt(snp_pkt_t* pkt, int overlay_conn)
 int getpktToSend(snp_pkt_t* pkt, int* nextNode, int network_conn)
 {	
   // sendpkt_arg_t required inorder to get nextNodeId 
-  sendpkt_arg_t *recvPackerArg = (sendpkt_arg_t *)malloc(sizeof(recvPackerArg));
+  sendpkt_arg_t *recvPackerArg = (sendpkt_arg_t *)malloc(sizeof(sendpkt_arg_t));
   char buf[sizeof(sendpkt_arg_t)+2]; 
   char c;
   int idx = 0;
@@ -177,7 +177,7 @@ int getpktToSend(snp_pkt_t* pkt, int* nextNode, int network_conn)
 			if(c=='#') {
 				buf[idx]=c;
 				idx++;
-				memcpy(recvPackerArg,buf,idx - 2);
+				memcpy(recvPackerArg,buf,sizeof(sendpkt_arg_t));
 				*pkt = recvPackerArg->pkt;
 				*nextNode = recvPackerArg->nextNodeID;
 				state = 0;
@@ -320,7 +320,7 @@ int recvpkt(snp_pkt_t* pkt, int conn)
 			if(c=='#') {
 				buf[idx]=c;
 				idx++;
-				memcpy(pkt,buf,idx -2);
+				memcpy(pkt,buf,sizeof(snp_pkt_t));
 				printf("PACKET in recvpkt received \n");
 				state = 0;
 				idx = 0 ;
@@ -340,6 +340,6 @@ int recvpkt(snp_pkt_t* pkt, int conn)
 	printf("PACKET ERROR in receiving recvpkt\n");
 	return -1;}
 
-int main(){
+int main2(){
 	return 0 ;
 }

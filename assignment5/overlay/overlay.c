@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <strings.h>
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -38,35 +39,165 @@ nbr_entry_t* nt;
 //declare the TCP connection to SNP process as global variable
 int network_conn; 
 
+int topology_my_node_id ;
+int topology_total_neighbours ;
+
 
 /**************************************************************/
 //implementation overlay functions
 /**************************************************************/
 
+
+int getListeningSocketFD(int port){
+	int conn_listen_fd = -1;
+	// create socket 
+	conn_listen_fd = socket (AF_INET, SOCK_STREAM, 0);
+	if(conn_listen_fd < 0)
+	{
+		printf("Error creating new scoket in acceptConnectionFromNode\n");
+		return -1;
+	}
+	struct sockaddr_in node_addr; // server
+	bzero(&node_addr,sizeof(node_addr));
+	node_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	node_addr.sin_family = AF_INET;
+    node_addr.sin_port = htons(port);
+	// BIND socket
+	if(bind(conn_listen_fd, (struct sockaddr *)&node_addr, sizeof(node_addr)) < 0) {
+        printf("Error in binding to socket %d \n",conn_listen_fd);
+        return -1;
+    }
+    
+    if (listen(conn_listen_fd, 1) < 0) { // max process to connect is 1
+        printf("Error in binding to socket %d \n",conn_listen_fd);
+        return -1;
+    }
+    fflush(stdout);
+    return conn_listen_fd;
+}
+
 // This thread opens a TCP port on CONNECTION_PORT and waits for the incoming connection from all the neighbors that have a larger node ID than my nodeID,
 // After all the incoming connections are established, this thread terminates 
 void* waitNbrs(void* arg) {
-	//put your code here
-  return 0;
+	printf("waitNbrs started \n");
+	if(nt){
+		int conn_listen_fd = getListeningSocketFD(CONNECTION_PORT);
+		if(conn_listen_fd < 0 ){
+			printf("unable to create listening socket \n Exiting program !! \n");
+			exit(0) ;
+		}
+		struct sockaddr_in node_client_addr; // client node coonecting to this node
+		socklen_t client_addr_length ;
+		for(int index = 0 ; index < topology_total_neighbours ; index++){
+			bzero(&node_client_addr,sizeof(node_client_addr));
+			// this node will connect with all the nodes with lesser than it self
+			if(nt[index].nodeID > topology_my_node_id){
+				printf("Found Waiting for connection from nodeID %d \n", nt[index].nodeID);
+				int conn = -1;
+    			conn = accept(conn_listen_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);
+				if(conn < 0){
+					printf("waitNbrs error in accepting connectin from nodeID %d \n Exiting program !!\n",nt[index].nodeID);
+					exit(0);
+				}
+				printf("Connection Established conn id = %d\n", conn);
+				nt_addconn(nt, topology_getNodeIDfromip(&node_client_addr.sin_addr), conn);
+			}
+		}
+		printf("waitNbrs ended with success.. \n");
+		return (void *)NULL;
+	}
+	printf("waitNbrs ended with error.. \n");
+	fflush(stdout);
+	return (void *)NULL;
+}
+
+int connectToNode(int nt_index){
+	int conn = -1;
+	conn = socket (AF_INET, SOCK_STREAM, 0);
+	if(conn < 0)
+	{
+		printf("Error creating new scoket in connectToNode\n");
+		return -1;
+	}
+	struct sockaddr_in node_addr;
+	bzero(&node_addr,sizeof(node_addr));
+	node_addr.sin_addr.s_addr = nt[nt_index].nodeIP;
+	node_addr.sin_family = AF_INET;
+    node_addr.sin_port = htons(CONNECTION_PORT);
+    if (connect(conn, (struct sockaddr *) &node_addr, sizeof(node_addr)) < 0) {
+    	printf("Error in connecting to %d in connectToNode \n",topology_getNodeIDfromip((struct in_addr *)&nt[nt_index].nodeIP));
+        return -1;
+    }
+    return conn;
 }
 
 // This function connects to all the neighbors that have a smaller node ID than my nodeID
 // After all the outgoing connections are established, return 1, otherwise return -1
 int connectNbrs() {
-	//put your code here
-  return 0;
+	printf("connect neighbours started \n");
+	if(nt){
+		int result = 1;
+		for(int index = 0 ; index < topology_total_neighbours ; index++){
+			// this node will connect with all the nodes with lesser than it self
+			if(nt[index].nodeID < topology_my_node_id){
+				printf("Node id found connecting to :- %d \n", nt[index].nodeID);
+				int conn = -1;
+				conn = connectToNode(index);
+				if(conn < 0){
+					printf("Error in creating new connection\n");
+					return -1;
+				}
+				printf("Connection Established conn id = %d\n", conn);
+				nt_addconn(nt, nt[index].nodeID, conn);
+			}
+		}
+		printf("connectNbrs ENDEND with SUCCESS \n");
+		return result;
+	}
+	printf("connect neighbours ended with fail \n");
+	return -1;
 }
 
 //Each listen_to_neighbor thread keeps receiving packets from a neighbor. It handles the received packets by forwarding the packets to the SNP process.
 //all listen_to_neighbor threads are started after all the TCP connections to the neighbors are established 
 void* listen_to_neighbor(void* arg) {
 	//put your code here
-  return 0;
+	printf("listen_to_neighbor started \n");
+	printf("listen_to_neighbor ended \n");
+	return 0;
 }
 
-//This function opens a TCP port on OVERLAY_PORT, and waits for the incoming connection from local SNP process. After the local SNP process is connected, this function keeps getting sendpkt_arg_ts from SNP process, and sends the packets to the next hop in the overlay network. If the next hop's nodeID is BROADCAST_NODEID, the packet should be sent to all the neighboring nodes.
+
+//This function opens a TCP port on OVERLAY_PORT, and waits for the incoming connection from local SNP process. After the local SNP process is connected, 
+//this function keeps getting sendpkt_arg_ts from SNP process, and sends the packets to the next hop in the overlay network. If the next hop's nodeID is BROADCAST_NODEID, 
+//the packet should be sent to all the neighboring nodes.
 void waitNetwork() {
 	//put your code here
+	printf("wait network started \n");
+	int snp_server_fd = getListeningSocketFD(OVERLAY_PORT);
+	if(snp_server_fd < 0)
+	{
+		printf("ERROR in waitNetwork unable to get socket \n Exiting program !! \n");
+		exit(0);
+	}
+	struct sockaddr_in node_client_addr; 
+	// client node coonecting to this node
+	socklen_t client_addr_length ;
+	bzero(&node_client_addr,sizeof(node_client_addr));
+	printf("Waiting for SNP process to connect\n");
+	int conn = -1;
+    conn = accept(snp_server_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);	
+	if(conn < 0){
+		printf("error in accepting SNP connection return %d\n Exiting program !! \n",conn );
+		exit(0);
+	}
+	
+	printf("SNP process connected with conn fd %d \n", conn);
+	
+	
+	
+	printf("wait network ended \n");
+
 }
 
 //this function stops the overlay
@@ -74,16 +205,23 @@ void waitNetwork() {
 //it is called when receiving a signal SIGINT
 void overlay_stop() {
 	//put your code here
+	printf("overlay_stop called\n");
+	close(network_conn);
+	nt_destroy(nt);
+	exit(1);
+	printf("overlay_stop ends\n");
 }
 
 int main() {
 	//start overlay initialization
-	printf("Overlay: Node %d initializing...\n",topology_getMyNodeID());	
-
+	topology_my_node_id = topology_getMyNodeID();
+	printf("Overlay: Node %d initializing...\n",topology_my_node_id);	
+	topology_total_neighbours = topology_getNbrNum();
+	printf("Total Neighbours = %d \n", topology_total_neighbours);
 	//create a neighbor table
 	nt = nt_create();
 	//initialize network_conn to -1, means no SNP process is connected yet
-	network_conn = -1;
+	network_conn = -1; // this will be set in waitForNbrs
 	
 	//register a signal handler which is sued to terminate the process
 	signal(SIGINT, overlay_stop);

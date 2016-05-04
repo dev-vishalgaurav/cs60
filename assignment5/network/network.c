@@ -19,6 +19,7 @@
 #include <sys/utsname.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <strings.h>
 
 #include "../common/constants.h"
 #include "../common/pkt.h"
@@ -39,15 +40,54 @@ int overlay_conn; 		//connection to the overlay
 //this function is used to for the SNP process to connect to the local ON process on port OVERLAY_PORT
 //connection descriptor is returned if success, otherwise return -1
 int connectToOverlay() { 
-	//put your code here
-  return 0;
+	int out_conn;
+	struct sockaddr_in servaddr;
+	struct hostent *hostInfo;
+	char *hostname = "localhost";
+	hostInfo = gethostbyname(hostname);
+	if(!hostInfo) {
+		printf("connectToOverlay ERROR - host name error!\n");
+		return -1;
+	}
+	servaddr.sin_family =hostInfo->h_addrtype;	
+	memcpy((char *) &servaddr.sin_addr.s_addr, hostInfo->h_addr_list[0], hostInfo->h_length);
+	servaddr.sin_port = htons(OVERLAY_PORT);
+	out_conn = socket(AF_INET,SOCK_STREAM,0);  
+	if(out_conn<0) {
+		printf("connectToOverlay ERROR - unable to create socket to %s!\n",hostname);
+		return -1;
+	}
+	if(connect(out_conn, (struct sockaddr*)&servaddr, sizeof(servaddr))<0)
+	{
+		printf("connectToOverlay ERROR - connect failed to %s!\n", hostname);
+		return -1;
+	} 
+	return out_conn; 
 }
 
 //This thread sends out route update packets every ROUTEUPDATE_INTERVAL time
 //In this lab this thread only broadcasts empty route update packets to all the neighbors, broadcasting is done by set the dest_nodeID in packet header as BROADCAST_NODEID
 void* routeupdate_daemon(void* arg) {
 	//put your code here
-  return 0;
+	printf("routeupdate_daemon started \n");
+	pkt_routeupdate_t *updated_route_packet = (pkt_routeupdate_t *) malloc(sizeof(pkt_routeupdate_t));
+	snp_pkt_t *route_packet = (snp_pkt_t *) malloc(sizeof(snp_pkt_t));
+	while(1){
+		sleep(ROUTEUPDATE_INTERVAL);
+		printf("preparing route updated\n");
+		// reset data
+		bzero(route_packet,sizeof(snp_pkt_t));
+		route_packet->header.dest_nodeID =  BROADCAST_NODEID;
+		route_packet->header.src_nodeID = topology_getMyNodeID();
+		route_packet->header.length = 0 ;
+		route_packet->header.type = ROUTE_UPDATE;
+		overlay_sendpkt(BROADCAST_NODEID,route_packet,overlay_conn);
+		printf("route update sent \n");
+	}
+	free(updated_route_packet);
+	printf("routeupdate_daemon going to end \n");
+	pthread_exit(NULL);
+	return 0;
 }
 
 //this thread handles incoming packets from the ON process
@@ -55,11 +95,12 @@ void* routeupdate_daemon(void* arg) {
 //In this lab, after receiving a packet, this thread just outputs the packet received information without handling the packet 
 void* pkthandler(void* arg) {
 	snp_pkt_t pkt;
-
+	bzero(&pkt,sizeof(pkt));
 	while(overlay_recvpkt(&pkt,overlay_conn)>0) {
 		printf("Routing: received a packet from neighbor %d\n",pkt.header.src_nodeID);
 	}
 	close(overlay_conn);
+	printf("Routing: Packet handler thread STOPPED\n");
 	overlay_conn = -1;
 	pthread_exit(NULL);
 }
@@ -69,6 +110,8 @@ void* pkthandler(void* arg) {
 //it is called when the SNP process receives a signal SIGINT
 void network_stop() {
 	//add your code here
+	close(overlay_conn);
+	printf(" network_stop called :- SNP process stopped\n");
 }
 
 

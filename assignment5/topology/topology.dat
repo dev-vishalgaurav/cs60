@@ -1,5 +1,5 @@
-carter.cs.dartmouth.edu localhost 2
-whaleback.cs.dartmouth.edu localhost 3
+carter.cs.dartmouth.edu bear.cs.dartmouth.edu 2
+whaleback.cs.dartmouth.edu bear.cs.dartmouth.edu 3
 wildcat.cs.dartmouth.edu carter.cs.dartmouth.edu 4
 wildcat.cs.dartmouth.edu whaleback.cs.dartmouth.edu 5
-wildcat.cs.dartmouth.edu localhost 7
+wildcat.cs.dartmouth.edu bear.cs.dartmouth.edu 7

@@ -5,6 +5,8 @@
 //
 //Date: May 3,2010
 
+#define _DEFAULT_SOURCE
+
 #include "topology.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,7 +31,7 @@
 int topology_getNodeIDfromname(char* hostname) 
 {
   struct hostent *hostInfo;
-  hostInfo = gethostbyname2(hostname,AF_INET);
+  hostInfo = gethostbyname(hostname);
   if(!hostInfo) {
   	printf("error in getting host name from string!\n");
   	return -1;
@@ -43,14 +45,14 @@ int topology_getNodeIDfromname(char* hostname)
 void get_ip_from_host_name(char* hostname,in_addr_t *ip){
 	//printf("get_ip_from_host_name starts\n");
 	struct hostent *hostInfo;
-	hostInfo = gethostbyname2(hostname,AF_INET);
+	hostInfo = gethostbyname(hostname);
 	if(!hostInfo) {
   		printf("error in getting host name from string!\n");
   		return;
   	}
   	printf("%s\n", (char *) hostInfo->h_addr_list[0]  );
   	memcpy((char *) ip, hostInfo->h_addr_list[0], hostInfo->h_length);
-  	printf("get_ip_from_host_name ends value = %s\n",(char *) ip);
+  	//printf("get_ip_from_host_name ends value = %s\n",(char *) ip);
   	return ;
 }
 //this function returns node ID from the given IP address
@@ -81,8 +83,7 @@ int topology_getNbrNum()
   		FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
 		if(topologyFile != NULL){
 			char line[120];
-			char hostBuf[50];
-			while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
+			while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 				char *firstHost = strtok(line, " ");
 				char *secondHost = strtok(NULL, " ");
 				//printf("firstHost = %s, secondHost = %s \n", firstHost, secondHost );
@@ -115,11 +116,9 @@ int topology_getNodeNum()
 	int *nodesFound ;
 	int size = 0;
 	FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
-	int unique = 0 ;
 	if(topologyFile != NULL){
 		char line[120];
-		char hostBuf[50];
-		while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
+		while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 			char *firstHost = strtok(line, " ");
 			char *secondHost = strtok(NULL, " ");
 			int firstNodeId = topology_getNodeIDfromname(firstHost);
@@ -154,11 +153,9 @@ int* topology_getNodeArray()
 	int *nodesFound ;
 	int size = 0;
 	FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
-	int unique = 0 ;
 	if(topologyFile != NULL){
 		char line[120];
-		char hostBuf[50];
-		while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
+		while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 			char *firstHost = strtok(line, " ");
 			char *secondHost = strtok(NULL, " ");
 			int firstNodeId = topology_getNodeIDfromname(firstHost);
@@ -194,11 +191,9 @@ int* topology_getNbrArray()
 	int size = 0;
 	int myNodeId = topology_getMyNodeID();
 	FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
-	int unique = 0 ;
 	if(topologyFile != NULL){
 		char line[120];
-		char hostBuf[50];
-		while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
+		while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 			char *firstHost = strtok(line, " ");
 			char *secondHost = strtok(NULL, " ");
 			int firstNodeId = topology_getNodeIDfromname(firstHost);
@@ -206,7 +201,7 @@ int* topology_getNbrArray()
 			if(myNodeId == firstNodeId || myNodeId == secondNodeId ){
 			//printf("firstNodeId = %d, secondNodeId = %d \n", firstNodeId, secondNodeId );
 				int neighbourId = (firstNodeId == myNodeId) ? secondNodeId : firstNodeId;
-				printf("Neighbour found  neighbourid = %d \n", neighbourId);
+				//printf("Neighbour found  neighbourid = %d \n", neighbourId);
 				if(size == 0){
 					nodesFound = realloc(nodesFound,sizeof(int));
 					nodesFound[size++] = neighbourId;
@@ -234,8 +229,7 @@ unsigned int topology_getCost(int fromNodeID, int toNodeID)
   		FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
 		if(topologyFile != NULL){
 			char line[120];
-			char hostBuf[50];
-			while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
+			while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 				char *firstHost = strtok(line, " ");
 				char *secondHost = strtok(NULL, " ");
 				int firstNodeId = topology_getNodeIDfromname(firstHost);

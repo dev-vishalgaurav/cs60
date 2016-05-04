@@ -9,7 +9,7 @@
 #define TOPOLOGY_H
 #include <netdb.h>
 
-#define TOPOLOGY_FILE_NAME "../topology/topology.dat"
+#define TOPOLOGY_FILE_NAME "./topology/topology.dat"
 
 //this function returns node ID of the given hostname
 //the node ID is an integer of the last 8 digit of the node's IP address

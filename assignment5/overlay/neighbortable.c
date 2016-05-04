@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <strings.h>
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -29,16 +30,15 @@ typedef struct neighborentry {
 //This function first creates a neighbor table dynamically. It then parses the topology/topology.dat file and fill the nodeID and nodeIP fields in all the entries, initialize conn field as -1 .
 //return the created neighbor table
 nbr_entry_t* nt_create()
-{
+{	
+	printf("nt_create called \n");
 	nbr_entry_t* table = NULL;
 	int size = 0;
 	int myNodeId = topology_getMyNodeID();
 	FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
-	int unique = 0 ;
 	if(topologyFile != NULL){
 		char line[120];
-		char hostBuf[50];
-		while(fgets(line, sizeof(line), (FILE*)topologyFile) > 0){
+		while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 			char *firstHost = strtok(line, " ");
 			char *secondHost = strtok(NULL, " ");
 			int firstNodeId = topology_getNodeIDfromname(firstHost);
@@ -53,7 +53,7 @@ nbr_entry_t* nt_create()
 					neighbourHostName = firstHost;
 					neighbourId = firstNodeId;
 				}
-				printf("Neighbour found  neighbour host = %s neighbourid = %d \n",neighbourHostName, neighbourId);
+				//printf("Neighbour found  neighbour host = %s neighbourid = %d \n",neighbourHostName, neighbourId);
 				nbr_entry_t *new_entry = (nbr_entry_t *)malloc(sizeof(nbr_entry_t)); ;
 				new_entry->nodeID = neighbourId;
 				new_entry->conn = -1;
@@ -70,37 +70,44 @@ nbr_entry_t* nt_create()
 		}
 		fclose(topologyFile);
 	}
+	printf("nt_create ended \n");
 	return table;
 }
 
 //This function destroys a neighbortable. It closes all the connections and frees all the dynamically allocated memory.
 void nt_destroy(nbr_entry_t* nt)
 {	
+	printf("nt_destroy called ..\n");
 	int neighbors = topology_getNbrNum();
+	printf("freeing neighbor table total = %d \n",neighbors);
 	for (int i = 0; i < neighbors; i++) {
         printf("closing connection %d \n", nt[i].conn );
         close(nt[i].conn);
     }
-    printf("freeing neighbor table\n");
     free(nt);    
 }
 
 //This function is used to assign a TCP connection to a neighbor table entry for a neighboring node. If the TCP connection is successfully assigned, return 1, otherwise return -1
 int nt_addconn(nbr_entry_t* nt, int nodeID, int conn)
 {	
+	printf("nt_addconn started for %d \n",nodeID);
 	if(nt){
+		printf("nt is ok\n");
 	    int totalNeighbours = topology_getNbrNum(); 
 	    for (int i = 0; i < totalNeighbours ; i++) {
 	        if (nt[i].nodeID == nodeID) { // check for proper neighbour to be found 
+	        	printf("node found id = %d\n",nodeID);
 	            nt[i].conn = conn;
+	           	printf("nt_addconn ending with success %d\n",nodeID);
 	            return 1;
 	        }
 	    }
 	}
+	printf("nt_addconn ending with fail %d\n",nodeID);
   return -1;
 }
 
-int main(){
+int main5(){
 	int neighbourCount = topology_getNbrNum();
 	nbr_entry_t *neighbor = nt_create();
 	for(int i = 0 ; i < neighbourCount ; i++){

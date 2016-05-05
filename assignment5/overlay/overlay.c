@@ -48,7 +48,7 @@ int topology_total_neighbours ;
 /**************************************************************/
 
 
-int getListeningSocketFD(int port){
+int getListeningSocketFD(int port, int maxConn){
 	int conn_listen_fd = -1;
 	// create socket 
 	conn_listen_fd = socket (AF_INET, SOCK_STREAM, 0);
@@ -68,7 +68,7 @@ int getListeningSocketFD(int port){
         return -1;
     }
     
-    if (listen(conn_listen_fd, 1) < 0) { // max process to connect is 1
+    if (listen(conn_listen_fd, maxConn) < 0) { // max process to connect is 1
         printf("Error in binding to socket %d \n",conn_listen_fd);
         return -1;
     }
@@ -81,7 +81,7 @@ int getListeningSocketFD(int port){
 void* waitNbrs(void* arg) {
 	printf("waitNbrs started \n");
 	if(nt){
-		int conn_listen_fd = getListeningSocketFD(CONNECTION_PORT);
+		int conn_listen_fd = getListeningSocketFD(CONNECTION_PORT,MAX_NODE_NUM);
 		if(conn_listen_fd < 0 ){
 			printf("unable to create listening socket \n Exiting program !! \n");
 			exit(0) ;
@@ -216,7 +216,7 @@ void keepReceivingPacketsFromSNP(){
 void waitNetwork() {
 	//put your code here
 	printf("wait network started \n");
-	int snp_server_fd = getListeningSocketFD(OVERLAY_PORT);
+	int snp_server_fd = getListeningSocketFD(OVERLAY_PORT,1);
 	if(snp_server_fd < 0)
 	{
 		printf("ERROR in waitNetwork unable to get socket \n Exiting program !! \n");

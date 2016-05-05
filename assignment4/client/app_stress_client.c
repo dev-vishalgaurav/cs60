@@ -25,7 +25,7 @@
 #define CLIENTPORT1 87
 #define SVRPORT1 88
 //after the file is sent, the client waits for WAITTIME seconds, and then closes the connection
-#define WAITTIME 5
+#define WAITTIME 10
 
 //this function starts the overlay by creating a direct TCP connection between the client and the server. The TCP socket descriptor is returned. If the TCP connection fails, return -1. The TCP socket descriptor returned will be used by SRT to send segments.
 int overlay_start() {

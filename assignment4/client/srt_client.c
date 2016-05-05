@@ -366,6 +366,7 @@ void handle_data_ack(client_tcb_t *client, seg_t *msg){
 	if(client->state == CONNECTED){
 		printf("handle_data_ack starts \n");
 		free_unack_segments(client,msg->header.ack_num);
+		send_unsent_segments(client);
 		printf("handle_data_ack ends\n");
 	}else{
 		printf("ERROR in DATAACK. received data ack in UNCONNECTED state\n");

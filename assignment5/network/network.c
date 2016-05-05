@@ -43,7 +43,7 @@ int connectToOverlay() {
 	int out_conn;
 	struct sockaddr_in servaddr;
 	struct hostent *hostInfo;
-	char *hostname = "localhost";
+	char *hostname = "localhost"; // connecting with the localhost as it is a local process 
 	hostInfo = gethostbyname(hostname);
 	if(!hostInfo) {
 		printf("connectToOverlay ERROR - host name error!\n");

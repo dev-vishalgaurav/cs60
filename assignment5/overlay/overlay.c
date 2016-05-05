@@ -163,10 +163,52 @@ int connectNbrs() {
 void* listen_to_neighbor(void* arg) {
 	//put your code here
 	printf("listen_to_neighbor started \n");
+	int neighbourIndex = *((int *) arg);
+	if(neighbourIndex >= 0){
+		snp_pkt_t *received_packet = (snp_pkt_t *)malloc(sizeof(snp_pkt_t));
+		while(recvpkt(received_packet, nt[neighbourIndex].conn) > 0){
+			printf("listen neighbour packet received \n");
+			forwardpktToSNP(received_packet, network_conn);	
+		}
+		printf(" freeing and closing connection for index %d \n", neighbourIndex );
+		close(nt[neighbourIndex].conn);
+    	nt[neighbourIndex].conn = -1;
+    	free(received_packet);
+	}else{
+		printf("listen_to_neighbor index error\n");
+	}
 	printf("listen_to_neighbor ended \n");
-	return 0;
+	fflush(stdout);
+	return NULL;
 }
-
+//this function keeps getting sendpkt_arg_ts from SNP process, and sends the packets to the next hop in the overlay network. If the next hop's nodeID is BROADCAST_NODEID, 
+//the packet should be sent to all the neighboring nodes.
+void keepReceivingPacketsFromSNP(){
+	printf("keepReceivingPacketsFromSNP starts \n");
+	snp_pkt_t *received_packet = (snp_pkt_t *)malloc(sizeof(snp_pkt_t));
+    int *fromNode = (int *)malloc(sizeof(int));
+    int totalNeighbours = topology_total_neighbours;
+    while (getpktToSend(received_packet, fromNode, network_conn) > 0) {
+    	printf("packet received from SNP node id = %d\n", *fromNode);
+    	fflush(stdout);
+    	for(int index = 0 ; index < totalNeighbours ; index++){
+    		if(*fromNode == BROADCAST_NODEID){
+    			printf("BROADCAST packet received forwarding to %d \n", nt[index].nodeID );
+    			sendpkt(received_packet, nt[index].conn);
+    		}else if(*fromNode == nt[index].nodeID){
+    			printf("NEXT HOP packet received sending to %d \n", nt[index].nodeID);
+    			sendpkt(received_packet, nt[index].conn);
+    			break; // packet sent for the node id hence break;
+    		}
+    	}
+    }
+	printf("SNP packet receiving ended \n");
+    free(received_packet);
+    free(fromNode);
+    close(network_conn);
+    printf("keepReceivingPacketsFromSNP ends \n");
+    fflush(stdout);
+}
 
 //This function opens a TCP port on OVERLAY_PORT, and waits for the incoming connection from local SNP process. After the local SNP process is connected, 
 //this function keeps getting sendpkt_arg_ts from SNP process, and sends the packets to the next hop in the overlay network. If the next hop's nodeID is BROADCAST_NODEID, 
@@ -185,17 +227,15 @@ void waitNetwork() {
 	socklen_t client_addr_length ;
 	bzero(&node_client_addr,sizeof(node_client_addr));
 	printf("Waiting for SNP process to connect\n");
-	int conn = -1;
-    conn = accept(snp_server_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);	
-	if(conn < 0){
-		printf("error in accepting SNP connection return %d\n Exiting program !! \n",conn );
+
+    network_conn = accept(snp_server_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);	
+	if(network_conn < 0){
+		printf("error in accepting SNP connection return %d\n Exiting program !! \n",network_conn );
 		exit(0);
 	}
-	
-	printf("SNP process connected with conn fd %d \n", conn);
-	
-	
-	
+	keepReceivingPacketsFromSNP();
+	printf("SNP process connected with conn fd %d \n", network_conn );
+
 	printf("wait network ended \n");
 
 }
@@ -227,7 +267,7 @@ int main() {
 	signal(SIGINT, overlay_stop);
 
 	//print out all the neighbors
-	int nbrNum = topology_getNbrNum();
+	int nbrNum = topology_total_neighbours;
 	int i;
 	for(i=0;i<nbrNum;i++) {
 		printf("Overlay: neighbor %d:%d\n",i+1,nt[i].nodeID);

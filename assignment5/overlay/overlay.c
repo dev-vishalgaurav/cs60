@@ -216,11 +216,10 @@ void keepReceivingPacketsFromSNP(){
     		}
     	}
     }
-	printf("SNP packet receiving ended \n");
+	printf("SNP packet receiving ended for SNP socket %d \n",network_conn);
     free(received_packet);
     free(fromNode);
     close(network_conn);
-    shutdown(network_conn,SHUT_RDWR);
     network_conn = -1;
     printf("keepReceivingPacketsFromSNP ends \n");
     fflush(stdout);
@@ -232,32 +231,30 @@ void keepReceivingPacketsFromSNP(){
 void waitNetwork() {
 	//put your code here
 	printf("wait network started \n");
+	
+	int snp_server_fd = -1;
+	snp_server_fd = getListeningSocketFD(OVERLAY_PORT,1);
+	if(snp_server_fd < 0)
+	{
+		printf("ERROR in waitNetwork unable to get socket.. sleeping ... \n !! Exiting program !! \n");
+		exit(0);
+	}
+	struct sockaddr_in node_client_addr; 
+	// client node coonecting to this node
+	socklen_t client_addr_length  = sizeof(node_client_addr);
 	while(1){
-		int snp_server_fd = -1;
-		if(network_conn < 0){
-			snp_server_fd = getListeningSocketFD(OVERLAY_PORT,1);
-			if(snp_server_fd < 0)
-			{
-				printf("ERROR in waitNetwork unable to get socket.. sleeping ... \n");
-				//exit(0);
-				sleep(3);
-				continue;
-			}
-		}
-		struct sockaddr_in node_client_addr; 
-		// client node coonecting to this node
-		socklen_t client_addr_length  = sizeof(node_client_addr);
 		bzero(&node_client_addr,sizeof(node_client_addr));
 		printf("Waiting for SNP process to connect\n");
-
 	    network_conn = accept(snp_server_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);	
 		if(network_conn < 0){
 			printf("error in accepting SNP connection return %d\n Exiting program !! \n",network_conn );
 		}else{
+			char ipaddress[100]; 
+    		inet_ntop( AF_INET, &(node_client_addr.sin_addr), ipaddress, INET_ADDRSTRLEN );
+			printf("SNP process connected with conn fd %d and ip address %s \n", network_conn, ipaddress );
 			keepReceivingPacketsFromSNP();
 		}
 		sleep(1); // wait for 1 sec to get new SNP connection
-		printf("SNP process connected with conn fd %d \n", network_conn );
 	}
 
 	printf("wait network ended \n");

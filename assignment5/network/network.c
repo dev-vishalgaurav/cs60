@@ -72,7 +72,7 @@ void* routeupdate_daemon(void* arg) {
 	printf("routeupdate_daemon started \n");
 	pkt_routeupdate_t *updated_route_packet = (pkt_routeupdate_t *) malloc(sizeof(pkt_routeupdate_t));
 	snp_pkt_t *route_packet = (snp_pkt_t *) malloc(sizeof(snp_pkt_t));
-	while(1){
+	while(overlay_conn > 0){
 		sleep(ROUTEUPDATE_INTERVAL);
 		printf("preparing route updated\n");
 		// reset data
@@ -83,6 +83,7 @@ void* routeupdate_daemon(void* arg) {
 		route_packet->header.type = ROUTE_UPDATE;
 		overlay_sendpkt(BROADCAST_NODEID,route_packet,overlay_conn);
 		printf("route update sent \n");
+		fflush(stdout);
 	}
 	free(updated_route_packet);
 	printf("routeupdate_daemon going to end \n");
@@ -97,7 +98,7 @@ void* pkthandler(void* arg) {
 	snp_pkt_t pkt;
 	bzero(&pkt,sizeof(pkt));
 	while(overlay_recvpkt(&pkt,overlay_conn)>0) {
-		printf("Routing: received a packet from neighbor %d\n",pkt.header.src_nodeID);
+		printf("Routing: received a packet in node %d from neighbor %d\n", topology_getMyNodeID(), pkt.header.src_nodeID);
 	}
 	close(overlay_conn);
 	printf("Routing: Packet handler thread STOPPED\n");
@@ -111,7 +112,9 @@ void* pkthandler(void* arg) {
 void network_stop() {
 	//add your code here
 	close(overlay_conn);
-	printf(" network_stop called :- SNP process stopped\n");
+	printf(" network_stop called :- SNP process stopped\n Exiting .. !! \n");
+	exit(0);
+
 }
 
 

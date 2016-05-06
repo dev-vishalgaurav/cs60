@@ -90,7 +90,7 @@ void nt_destroy(nbr_entry_t* nt)
 //This function is used to assign a TCP connection to a neighbor table entry for a neighboring node. If the TCP connection is successfully assigned, return 1, otherwise return -1
 int nt_addconn(nbr_entry_t* nt, int nodeID, int conn)
 {	
-	printf("nt_addconn started for %d \n",nodeID);
+	printf("nt_addconn started for node id  %d  and conn id %d \n", nodeID, conn);
 	if(nt){
 		printf("nt is ok\n");
 	    int totalNeighbours = topology_getNbrNum(); 

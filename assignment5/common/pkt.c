@@ -265,6 +265,7 @@ int sendpkt(snp_pkt_t* pkt, int conn)
   	}else{
   		printf("error sendpkt conn id = %d \n",conn);
   	}
+  	fflush(stdout);
   }
   return result;
 }
@@ -337,7 +338,7 @@ int recvpkt(snp_pkt_t* pkt, int conn)
 			}
 		}
 	}
-	printf("PACKET ERROR in receiving recvpkt\n");
+	printf("PACKET ERROR in receiving recvpkt for connection %d \n", conn);
 	return -1;}
 
 int main2(){

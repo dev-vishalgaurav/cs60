@@ -87,9 +87,9 @@ void* waitNbrs(void* arg) {
 			exit(0) ;
 		}
 		struct sockaddr_in node_client_addr; // client node coonecting to this node
-		socklen_t client_addr_length ;
+		socklen_t client_addr_length  = sizeof(node_client_addr);
 		for(int index = 0 ; index < topology_total_neighbours ; index++){
-			bzero(&node_client_addr,sizeof(node_client_addr));
+			bzero(&node_client_addr,client_addr_length);
 			// this node will connect with all the nodes with lesser than it self
 			if(nt[index].nodeID > topology_my_node_id){
 				printf("Found Waiting for connection from nodeID %d \n", nt[index].nodeID);
@@ -99,8 +99,9 @@ void* waitNbrs(void* arg) {
 					printf("waitNbrs error in accepting connectin from nodeID %d \n Exiting program !!\n",nt[index].nodeID);
 					exit(0);
 				}
-				printf("Connection Established conn id = %d\n", conn);
-				nt_addconn(nt, topology_getNodeIDfromip(&node_client_addr.sin_addr), conn);
+				int recvNodeId =  topology_getNodeIDfromip1(&node_client_addr);
+				printf("Connection Established expected node id = %d , received node id %d and conn id = %d\n", nt[index].nodeID , recvNodeId, conn);
+				nt_addconn(nt, recvNodeId , conn);
 			}
 		}
 		printf("waitNbrs ended with success.. \n");
@@ -167,10 +168,10 @@ void* listen_to_neighbor(void* arg) {
 	if(neighbourIndex >= 0){
 		snp_pkt_t *received_packet = (snp_pkt_t *)malloc(sizeof(snp_pkt_t));
 		while(recvpkt(received_packet, nt[neighbourIndex].conn) > 0){
-			printf("listen neighbour packet received \n");
+			printf("PACKET Received from %d forwarding to local SNP (%d)\n", received_packet->header.src_nodeID, topology_getMyNodeID());
 			forwardpktToSNP(received_packet, network_conn);	
 		}
-		printf(" freeing and closing connection for index %d \n", neighbourIndex );
+		printf(" freeing and closing connection of Local (%d) for node id  %d \n", topology_getMyNodeID(), nt[neighbourIndex].nodeID );
 		close(nt[neighbourIndex].conn);
     	nt[neighbourIndex].conn = -1;
     	free(received_packet);
@@ -193,8 +194,12 @@ void keepReceivingPacketsFromSNP(){
     	fflush(stdout);
     	for(int index = 0 ; index < totalNeighbours ; index++){
     		if(*fromNode == BROADCAST_NODEID){
-    			printf("BROADCAST packet received forwarding to %d \n", nt[index].nodeID );
-    			sendpkt(received_packet, nt[index].conn);
+    			if(nt[index].conn > 0){ // only if neighbour connection is up
+    				printf("BROADCAST packet received from %d forwarding to %d \n", received_packet->header.src_nodeID, nt[index].nodeID );
+    				sendpkt(received_packet, nt[index].conn);
+    			}else{
+    				printf("BROADCAST packet received from %d  but NOT SENT to %d neighbour is down \n", received_packet->header.src_nodeID, nt[index].nodeID );
+    			}
     		}else if(*fromNode == nt[index].nodeID){
     			printf("NEXT HOP packet received sending to %d \n", nt[index].nodeID);
     			sendpkt(received_packet, nt[index].conn);
@@ -224,7 +229,7 @@ void waitNetwork() {
 	}
 	struct sockaddr_in node_client_addr; 
 	// client node coonecting to this node
-	socklen_t client_addr_length ;
+	socklen_t client_addr_length  = sizeof(node_client_addr);
 	bzero(&node_client_addr,sizeof(node_client_addr));
 	printf("Waiting for SNP process to connect\n");
 
@@ -285,6 +290,8 @@ int main() {
 
 	//wait for waitNbrs thread to return
 	pthread_join(waitNbrs_thread,NULL);	
+
+	printf("\n\n \t\t !! START SNP LAYER !! \n\n");
 
 	//at this point, all connections to the neighbors are created
 	

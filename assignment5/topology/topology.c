@@ -55,6 +55,24 @@ void get_ip_from_host_name(char* hostname,in_addr_t *ip){
   	//printf("get_ip_from_host_name ends value = %s\n",(char *) ip);
   	return ;
 }
+int topology_getNodeIDfromip1(struct sockaddr_in* client){
+	int nodeID;
+    char ipaddress[100]; 
+    inet_ntop( AF_INET, &(client->sin_addr), ipaddress, INET_ADDRSTRLEN );
+    //ipaddress = inet_ntoa(client->sin_addr);
+    printf("topology_getNodeIDfromip1 ip addr = %s\n", ipaddress);
+    char *split = strtok(ipaddress, ".");
+    printf("topology_getNodeIDfromip1 1 = %s\n", split);
+    split = strtok(NULL,".");
+    printf("topology_getNodeIDfromip1 2 = %s\n", split);
+    split = strtok(NULL,".");
+    printf("topology_getNodeIDfromip1 3 = %s\n", split);
+    split = strtok(NULL,".");
+    printf("topology_getNodeIDfromip1 4 = %s\n", split);
+    nodeID = atoi(split);
+    return nodeID;
+}
+
 //this function returns node ID from the given IP address
 //if the node ID can't be retrieved, return -1
 int topology_getNodeIDfromip(struct in_addr* addr)

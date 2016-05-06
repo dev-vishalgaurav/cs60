@@ -17,6 +17,7 @@
 //if the node ID can't be retrieved, return -1
 int topology_getNodeIDfromname(char* hostname); 
 
+int topology_getNodeIDfromip1(struct sockaddr_in* client);
 //this function returns node ID from the given IP address
 //if the node ID can't be retrieved, return -1
 int topology_getNodeIDfromip(struct in_addr* addr);

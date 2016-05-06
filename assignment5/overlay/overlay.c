@@ -62,13 +62,22 @@ int getListeningSocketFD(int port, int maxConn){
 	node_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	node_addr.sin_family = AF_INET;
     node_addr.sin_port = htons(port);
+    int yes = 1;
+	if ( setsockopt(conn_listen_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1 )
+	{
+    	close(conn_listen_fd);
+    	printf("setsockopt error in binding ");
+    	return -1;
+	}
 	// BIND socket
 	if(bind(conn_listen_fd, (struct sockaddr *)&node_addr, sizeof(node_addr)) < 0) {
+		close(conn_listen_fd);
         printf("Error in binding to socket %d \n",conn_listen_fd);
         return -1;
     }
     
     if (listen(conn_listen_fd, maxConn) < 0) { // max process to connect is 1
+    	close(conn_listen_fd);
         printf("Error in binding to socket %d \n",conn_listen_fd);
         return -1;
     }
@@ -211,6 +220,8 @@ void keepReceivingPacketsFromSNP(){
     free(received_packet);
     free(fromNode);
     close(network_conn);
+    shutdown(network_conn,SHUT_RDWR);
+    network_conn = -1;
     printf("keepReceivingPacketsFromSNP ends \n");
     fflush(stdout);
 }
@@ -221,25 +232,33 @@ void keepReceivingPacketsFromSNP(){
 void waitNetwork() {
 	//put your code here
 	printf("wait network started \n");
-	int snp_server_fd = getListeningSocketFD(OVERLAY_PORT,1);
-	if(snp_server_fd < 0)
-	{
-		printf("ERROR in waitNetwork unable to get socket \n Exiting program !! \n");
-		exit(0);
-	}
-	struct sockaddr_in node_client_addr; 
-	// client node coonecting to this node
-	socklen_t client_addr_length  = sizeof(node_client_addr);
-	bzero(&node_client_addr,sizeof(node_client_addr));
-	printf("Waiting for SNP process to connect\n");
+	while(1){
+		int snp_server_fd = -1;
+		if(network_conn < 0){
+			snp_server_fd = getListeningSocketFD(OVERLAY_PORT,1);
+			if(snp_server_fd < 0)
+			{
+				printf("ERROR in waitNetwork unable to get socket.. sleeping ... \n");
+				//exit(0);
+				sleep(3);
+				continue;
+			}
+		}
+		struct sockaddr_in node_client_addr; 
+		// client node coonecting to this node
+		socklen_t client_addr_length  = sizeof(node_client_addr);
+		bzero(&node_client_addr,sizeof(node_client_addr));
+		printf("Waiting for SNP process to connect\n");
 
-    network_conn = accept(snp_server_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);	
-	if(network_conn < 0){
-		printf("error in accepting SNP connection return %d\n Exiting program !! \n",network_conn );
-		exit(0);
+	    network_conn = accept(snp_server_fd,(struct sockaddr*)&node_client_addr,&client_addr_length);	
+		if(network_conn < 0){
+			printf("error in accepting SNP connection return %d\n Exiting program !! \n",network_conn );
+		}else{
+			keepReceivingPacketsFromSNP();
+		}
+		sleep(1); // wait for 1 sec to get new SNP connection
+		printf("SNP process connected with conn fd %d \n", network_conn );
 	}
-	keepReceivingPacketsFromSNP();
-	printf("SNP process connected with conn fd %d \n", network_conn );
 
 	printf("wait network ended \n");
 

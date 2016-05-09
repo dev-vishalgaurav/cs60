@@ -1,0 +1,25 @@
+In client directory:
+	app_simple_client.c - simple client application source file
+	app_stress_client.c - stress test client application source file
+ 	srt_client.h - srt client header file	
+	srt_client.c - srt client source file
+	send_this_text.txt - text file to be sent by stress test application
+In server directory:
+	app_simple_server.c - simple server application source file
+	app_stress_server.c - stress test client appliction source file
+	srt_server.h - srt server header file
+	srt_server.c - srt server source file
+In common directory:
+	seg.h - segment header file
+	seg.c - segment source file
+	constants.h - constants used by SRT 
+
+
+use make to compile
+To run simple application:
+goto server directory and run ./app_simple_server
+goto client directory and run ./app_simple_client
+To run stress application:
+goto server directory and run ./app_stress_server
+goto client directory and run ./app_stress_client
+

@@ -18,9 +18,29 @@
 //	return node%MAX_ROUTINGTABLE_ENTRIES;
 //}
 //
-int makehash(int node)
+int makehash(int destNodeID)
 {
-  return 0;
+  return destNodeID % MAX_ROUTINGTABLE_SLOTS;
+}
+/*
+//routingtable_entry_t is the routing entry contained in the routing table.
+typedef struct routingtable_entry {
+	int destNodeID;		//destination node ID
+	int nextNodeID;		//next node ID to which the packet should be forwarded
+	struct routingtable_entry* next;	//pointer to the next routingtable_entry_t in the same routing table slot
+} routingtable_entry_t;
+
+//A routing table is a hash table containing MAX_ROUTINGTABLE_SLOTS slots. Each slot is a linked list of routing entries.
+typedef struct routingtable {
+	routingtable_entry_t* hash[MAX_ROUTINGTABLE_SLOTS];
+} routingtable_t;
+*/
+
+void reset_routing_table(routingtable_t* routing_table){
+	for (int count = 0; count < MAX_ROUTINGTABLE_SLOTS; ++count)
+	{
+		routing_table->hash[count] = NULL;
+	}
 }
 
 //This function creates a routing table dynamically.
@@ -29,14 +49,47 @@ int makehash(int node)
 //The dynamically created routing table structure is returned.
 routingtable_t* routingtable_create()
 {
-  return 0;
+  routingtable_t *routing_table = (routingtable_t *) malloc( sizeof(routingtable_t));
+  // after malloc reset the routing table
+  reset_routing_table(routing_table);
+  int* allNeighbours = topology_getNbrArray();
+  int total_neighbour_count = topology_getNbrNum();
+  for (int index = 0; index < total_neighbour_count; index++)
+  {
+  	// reusing the set next node method defined below.
+  	routingtable_setnextnode(routing_table,allNeighbours[index],allNeighbours[index]);
+  }
+  free(allNeighbours);
+  return routing_table;
 }
+
 
 //This funtion destroys a routing table. 
 //All dynamically allocated data structures for this routing table are freed.
 void routingtable_destroy(routingtable_t* routingtable)
-{
-  return;
+{	
+	if(routingtable){
+		for (int index = 0; index < MAX_ROUTINGTABLE_SLOTS; index++)
+		{
+			if(routingtable->hash[index] != NULL){
+				routingtable_entry_t *head = routingtable->hash[index];
+				while(head != NULL){
+					routingtable_entry_t *next = head->next; // store the next entry
+					free(head); // free current entry
+					head = next; // assign the next pointer
+				}
+			}
+		}
+	}
+	free(routingtable);
+}
+
+routingtable_entry_t* get_new_route_entry(int destNodeID, int nextNodeID){
+	routingtable_entry_t *newNode = (routingtable_entry_t *) malloc(sizeof(routingtable_entry_t));
+	newNode->destNodeID = destNodeID;
+	newNode->nextNodeID = nextNodeID;
+	newNode->next = NULL;
+	return newNode;
 }
 
 //This function updates the routing table using the given destination node ID and next hop's node ID.
@@ -48,7 +101,22 @@ void routingtable_destroy(routingtable_t* routingtable)
 //Then append the routing entry to the linked list in that slot.
 void routingtable_setnextnode(routingtable_t* routingtable, int destNodeID, int nextNodeID)
 {
-  return;
+	int slotIndex = makehash(destNodeID);
+	if(slotIndex >= 0){
+		if(routingtable->hash[slotIndex] == NULL){
+			routingtable->hash[slotIndex] = get_new_route_entry(destNodeID,nextNodeID);
+		}else{
+			routingtable_entry_t *head = routingtable->hash[slotIndex];
+			while(head->next != NULL){
+				if(head->destNodeID == destNodeID){
+					head->nextNodeID = nextNodeID;
+					return;
+				}
+				head = head->next;
+			}
+			head->next = get_new_route_entry(destNodeID,nextNodeID);
+		}
+	}
 }
 
 //This function looks up the destNodeID in the routing table.
@@ -57,8 +125,20 @@ void routingtable_setnextnode(routingtable_t* routingtable, int destNodeID, int 
 //If the destNodeID is found, return the nextNodeID for this destination node.
 //If the destNodeID is not found, return -1.
 int routingtable_getnextnode(routingtable_t* routingtable, int destNodeID)
-{
-  return 0;
+{	
+	int result = -1;
+	int slotIndex = makehash(destNodeID);
+	if(slotIndex >= 0){
+		routingtable_entry_t *head = routingtable->hash[slotIndex];
+		while(head != NULL){
+			if(head->destNodeID == destNodeID){
+				result = head->nextNodeID ;
+				break;
+			}
+			head = head->next;
+		}
+	}
+	return result;
 }
 
 //This function prints out the contents of the routing table

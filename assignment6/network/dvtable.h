@@ -35,6 +35,7 @@ typedef struct distancevector {
 //The dynamically created dvtable is returned.
 dv_t* dvtable_create();
 
+dv_entry_t* dvtable_create_dventries(int nodeID, int* allNodes, int total_overlay_nodes);
 //This function destroys a dvtable. 
 //It frees all the dynamically allocated memory for the dvtable.
 void dvtable_destroy(dv_t* dvtable);

@@ -1,22 +1,141 @@
+//
+// FILE: seg.h
 
+// Description: This file contains segment definitions and interfaces to send and receive segments. 
+// The prototypes support snp_sendseg() and snp_rcvseg() for sending to the network layer.
+//
+// Date: April 18, 2008
+//       April 21, 2008 **Added more detailed description of prototypes fixed ambiguities** ATC
+//       April 26, 2008 **Added checksum descriptions**
+//
+
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <string.h>
+#include <strings.h>
+#include <stdio.h>
 #include "seg.h"
 
+int sendseg(int network_conn, int dest_nodeID, seg_t* segPtr, int isCheckSum){
+	/**
+	* calculate the checksum and set it to 
+	*/
+    //printf("snp_sendseg connection = %d, client_port = %d, server_port = %d \n", connection, segPtr->header.src_port, segPtr->header.dest_port);
+	char bufstart[2] = "!&";
+	char bufend[2] = "!#";
+
+	if(isCheckSum){
+		//reset the checksum variable and set it to 0;
+		segPtr->header.checksum = 0;
+		segPtr->header.checksum = checksum(segPtr);
+		printf("CHECKSUM = %d \n", segPtr->header.checksum );
+	}
+	sendseg_arg_t *seg_wrapper = (sendseg_arg_t *) malloc(sizeof(sendseg_arg_t));
+	bzero(seg_wrapper,sizeof(sendseg_arg_t));
+	seg_wrapper->nodeID = dest_nodeID;
+	seg_wrapper->seg = *segPtr;
+	// 1. send the start chars
+	// 2. if 1 ok then send actual segment wrapped in seg_arg_t (send size is equal to size of destNodeID + seg_t size)
+	// 3. if seg arg send correctly then send end chars
+	if (send(network_conn, bufstart, 2, 0) < 0 || send(network_conn,seg_wrapper,(sizeof(int) + sizeof(srt_hdr_t) + segPtr->header.length), 0) < 0 || send(network_conn,bufend,2,0) < 0) {
+		printf("snp_sendseg ended with ERROR \n");
+		free(seg_wrapper);
+		return -1;
+	}
+	free(seg_wrapper);
+	return 1;
+}
 
 //SRT process uses this function to send a segment and its destination node ID in a sendseg_arg_t structure to SNP process to send out. 
 //Parameter network_conn is the TCP descriptor of the connection between the SRT process and the SNP process. 
 //Return 1 if a sendseg_arg_t is succefully sent, otherwise return -1.
 int snp_sendseg(int network_conn, int dest_nodeID, seg_t* segPtr)
 {
-  return 0;
+	return sendseg(network_conn,dest_nodeID,segPtr,1); // checksum should be checked
 }
-
+int recvseg(int network_conn, int* src_nodeID, seg_t* segPtr, int isCheckSum){
+	sendseg_arg_t *seg_wrapper = (sendseg_arg_t *) malloc(sizeof(sendseg_arg_t));
+	char buf[sizeof(sendseg_arg_t)+2]; 
+	char c;
+	int idx = 0;
+	// state can be 0,1,2,3; 
+	// 0 starting point 
+	// 1 '!' received
+	// 2 '&' received, start receiving segment
+	// 3 '!' received,
+	// 4 '#' received, finish receiving segment 
+	int state = 0; 
+	while(recv(network_conn,&c,1,0)>0) {
+		if (state == 0) {
+		        if(c=='!')
+				state = 1;
+		}
+		else if(state == 1) {
+			if(c=='&') 
+				state = 2;
+			else
+				state = 0;
+		}
+		else if(state == 2) {
+			if(c=='!') {
+				buf[idx]=c;
+				idx++;
+				state = 3;
+			}
+			else {
+				buf[idx]=c;
+				idx++;
+			}
+		}
+		else if(state == 3) {
+			if(c=='#') { 
+				// full packet received
+				buf[idx]=c;
+				idx++;
+				if(isCheckSum){
+					// seg lost commented for now
+					if(seglost(segPtr)>0) {
+	                    printf("seg lost!!!\n");
+	                    continue;
+	                }
+	                int checksum = checkchecksum(segPtr);
+	                printf("CHECKCHECKSUM = %d \n", checksum );
+	                if(checksum < 0 ) {
+	                    printf("INVALID CHECKSUM! DROPPED\n");
+	                    continue;
+	                }
+            	}
+				memcpy(seg_wrapper,buf,sizeof(sendseg_arg_t));
+				// wrapper received hence assign the inside values to passed arguments
+				*segPtr = seg_wrapper->seg;
+				*src_nodeID = seg_wrapper->nodeID;
+				free(seg_wrapper);
+				state = 0;
+				idx = 0;
+				return 1;
+			}
+			else if(c=='!') {
+				buf[idx]=c;
+				idx++;
+			}
+			else {
+				buf[idx]=c;
+				idx++;
+				state = 2;
+			}
+		}
+	}
+	free(seg_wrapper);
+	printf("snp_recvseg ended with ERROR \n");
+	return -1;
+}
 //SRT process uses this function to receive a  sendseg_arg_t structure which contains a segment and its src node ID from the SNP process. 
 //Parameter network_conn is the TCP descriptor of the connection between the SRT process and the SNP process. 
 //When a segment is received, use seglost to determine if the segment should be discarded, also check the checksum.  
 //Return 1 if a sendseg_arg_t is succefully received, otherwise return -1.
 int snp_recvseg(int network_conn, int* src_nodeID, seg_t* segPtr)
 {
-  return 0;
+	return recvseg(network_conn, src_nodeID, segPtr, 1);
 }
 
 //SNP process uses this function to receive a sendseg_arg_t structure which contains a segment and its destination node ID from the SRT process.
@@ -24,7 +143,7 @@ int snp_recvseg(int network_conn, int* src_nodeID, seg_t* segPtr)
 //Return 1 if a sendseg_arg_t is succefully received, otherwise return -1.
 int getsegToSend(int tran_conn, int* dest_nodeID, seg_t* segPtr)
 {
-  return 0;
+  return recvseg(tran_conn, dest_nodeID, segPtr, 0); // checksum is false in this case
 }
 
 //SNP process uses this function to send a sendseg_arg_t structure which contains a segment and its src node ID to the SRT process.
@@ -32,7 +151,7 @@ int getsegToSend(int tran_conn, int* dest_nodeID, seg_t* segPtr)
 //Return 1 if a sendseg_arg_t is succefully sent, otherwise return -1.
 int forwardsegToSRT(int tran_conn, int src_nodeID, seg_t* segPtr)
 {
-  return 0;
+  return sendseg(tran_conn, src_nodeID, segPtr, 0); // checksum is false in this case
 }
 
 // for seglost(seg_t* segment):
@@ -41,27 +160,116 @@ int forwardsegToSRT(int tran_conn, int src_nodeID, seg_t* segPtr)
 // If the segment is not lost, return 0. 
 // Even the segment is not lost, the packet has PKT_LOST_RATE/2 probability to have invalid checksum
 // We flip  a random bit in the segment to create invalid checksum
-int seglost(seg_t* segPtr)
-{
-  return 0;
-}
-//
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+int seglost(seg_t* segPtr) {
+	int random = rand()%100;
+	if(random<PKT_LOSS_RATE*100) {
+		//50% probability of losing a segment
+		if(rand()%2==0) {
+			printf("seg lost!!!\n");
+      return 1;
+		}
+		//50% chance of invalid checksum
+		else {
+			//get data length
+			int len = sizeof(srt_hdr_t)+segPtr->header.length;
+			//get a random bit that will be flipped
+			int errorbit = rand()%(len*8);
+			//flip the bit
+			char* temp = (char*)segPtr;
+			temp = temp + errorbit/8;
+			*temp = *temp^(1<<(errorbit%8));
+			return 0;
+		}
+	}
+	return 0;
 
-//This function calculates checksum over the given segment.
-//The checksum is calculated over the segment header and segment data.
-//You should first clear the checksum field in segment header to be 0.
-//If the data has odd number of octets, add an 0 octets to calculate checksum.
-//Use 1s complement for checksum calculation.
-unsigned short checksum(seg_t* segment)
-{
-  return 0;
 }
 
-//Check the checksum in the segment,
-//return 1 if the checksum is valid,
-//return -1 if the checksum is invalid
-int checkchecksum(seg_t* segment)
-{
-  return 0;
+//check checksum
+//Denote the data the checksum is calculated as D
+//D = segment header + segment data
+//if size of D (in bytes) is odd number
+//append an byte with all bits set as 0 to D
+//Divide D into 16-bits-long values
+//add all these 16-bits-long values using 1s complement
+//the sum should be FFFF if it's valid checksum
+//so flip all the bits of the sum 
+//return 1 if the result is 0 
+//return -1 if the result is not 0 
+//
+// Pseudocode
+// 1) sum = 0
+// 2) Get number of 16-bit blocks in segment (len)
+//      increment by 1 if need to
+// 3) temp = segment (temp is a pointer)
+// 4) while(len > 0)
+//      sum += *temp
+//      temp++
+//      if(sum & 0x10000)
+//        sum = (sum & 0xFFFF)+1 // Check for and take care of overflow
+//      len--
+// 5) result = ~sum
+// 6) if(resul == 0) return 1
+//    else return -1
+//
+int checkchecksum(seg_t *segment){
+        long sum = 0;
+        //len is the number of 16-bit data to calculate the checksum
+        int len = sizeof(srt_hdr_t)+segment->header.length;
+        if(len%2==1)
+        	len++;
+        len = len/2;
+        unsigned short* temp = (unsigned short*)segment;
+
+        while(len > 0){
+        	sum += *temp;
+       		temp++;
+        	//if overflow, round the most significant 1
+        	if(sum & 0x10000)
+        		sum = (sum & 0xFFFF) + 1;
+        	len --;
+       }
+        
+       unsigned short result =~sum;
+       if(result == 0)
+		return 1;
+	else
+		return -1;
 }
+
+
+//calculate checksum over the segment
+//clear the checksum field in segment to be 0
+//Denote the data from which the checksum is calculated as D
+//D = segment header + segment data
+//if size of D (in bytes) is odd number
+//append a byte with all bits set as 0 to D
+//Divide D into 16-bits-long values
+//add all these 16-bits-long values using 1s complement
+//flip the all the bits of the sum to get the checksum
+unsigned short checksum(seg_t *segment){
+	segment->header.checksum = 0;
+	if(segment->header.length%2==1)
+		segment->data[segment->header.length] = 0;
+	
+	long sum = 0;  
+	//len is the number of 16-bit data to calculate the checksum
+	int len = sizeof(srt_hdr_t)+segment->header.length;
+	if(len%2==1)
+		len++;
+	len = len/2;
+	unsigned short* temp = (unsigned short*)segment;
+
+        while(len > 0){
+        	sum += *temp;
+		temp++;
+		//if overflow, round the most significant 1
+             	if(sum & 0x10000)   
+               		sum = (sum & 0xFFFF) + 1;
+             	len --;
+        }
+           	
+	return ~sum;
+}
+

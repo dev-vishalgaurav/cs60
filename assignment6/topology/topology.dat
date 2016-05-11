@@ -1,5 +1,5 @@
-host3 host4 2
-host2 host4 3
-host1 host3 4
-host1 host2 5
-host1 host4 7
+localhost spruce.cs.dartmouth.edu 5
+localhost gile.cs.dartmouth.edu 4
+localhost green.cs.dartmouth.edu 7
+gile.cs.dartmouth.edu green.cs.dartmouth.edu 2
+spruce.cs.dartmouth.edu green.cs.dartmouth.edu 3

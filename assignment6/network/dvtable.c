@@ -33,13 +33,18 @@ typedef struct distancevector {
 */
 dv_t* dvtable_create()
 {
+  //printf("dvtable_create called\n");
   dv_t *dv_table = NULL;
   int total_neighbours = topology_getNbrNum();
+  //printf("1\n");
   int total_overlay_nodes = topology_getNodeNum();
+  //printf("dvtable 2\n");
   int *allNodes = topology_getNodeArray();
+  //printf("all nodes done\n");
   int *allNeighbours = topology_getNbrArray();
   int malloc_size = sizeof(dv_t) * (total_neighbours + 1);
   dv_table = (dv_t *)malloc(malloc_size);
+  //printf("dvtable\n");
   if(dv_table && allNeighbours && allNodes){
   	/* last one is the current node */
   	dv_table[total_neighbours].nodeID = topology_getMyNodeID();
@@ -132,15 +137,15 @@ void dvtable_print(dv_t* dvtable)
  	if(dvtable){ // error checking
 		// first search for all the nodes plus my node in the db table
 		int *allNodes = topology_getNodeArray();
-		printf("Node ID \t");
+		printf("%10s","NodeID");
 		for(int columns = 0 ; columns < topology_getNodeNum() ; columns++){
-			printf("Node %d \t", allNodes[columns]);
+			printf("%10d", allNodes[columns]);
 		}
 		printf("\n");
 		for(int index = 0 ; index <= topology_getNbrNum() ; index++){
-  			printf("%d\t",dvtable[index].nodeID);
+  			printf("%10d",dvtable[index].nodeID);
   			for(int nodeIndex = 0 ; nodeIndex < topology_getNodeNum() ; nodeIndex++){
-  				  	printf("%d\t",dvtable[index].dvEntry[nodeIndex].cost); 					
+  				  	printf("%10d",dvtable[index].dvEntry[nodeIndex].cost); 					
   			}
   			printf("\n");
 		}

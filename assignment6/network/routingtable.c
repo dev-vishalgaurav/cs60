@@ -144,5 +144,24 @@ int routingtable_getnextnode(routingtable_t* routingtable, int destNodeID)
 //This function prints out the contents of the routing table
 void routingtable_print(routingtable_t* routingtable)
 {
-  return;
+  printf("Printing Routing table \n");
+  if(routingtable){
+  	printf("%10s\n","Hash No" );
+  	for(int index = 0 ; index < MAX_ROUTINGTABLE_SLOTS ; index++){
+  		if(routingtable->hash[index] != NULL){
+  			printf("%10d %5s", index,"");
+  			routingtable_entry_t *head = routingtable->hash[index];
+			while(head != NULL){
+				printf("{'dest':%d, 'next':%d}",head->destNodeID,head->nextNodeID );
+				if(head->next!=NULL){
+					printf(" -> \n");
+				}
+				head = head->next;
+			}
+  		}else{
+  			printf("%10d %10s", index," {NULL}");
+  		}
+  		printf("\n");
+  	}	
+  }
 }

@@ -39,6 +39,7 @@ int topology_getNodeIDfromname(char* hostname)
   struct sockaddr_in servaddr;
   memcpy((char *) &servaddr.sin_addr.s_addr, hostInfo->h_addr_list[0], hostInfo->h_length);
   int ipAddr = ntohl(servaddr.sin_addr.s_addr); // network order to host byte order
+  //printf("topology_getNodeIDfromname ends\n");
   return ipAddr & 0x000000FF; // to get the last digit od ip address mask it with 0.0.0.255 :D 
 }
 
@@ -87,6 +88,7 @@ int topology_getMyNodeID()
 {
    char hostname[50];
    gethostname(hostname,sizeof(hostname)); // get the ip address of local machine
+   //printf("hostname = %s \n", hostname );
   //printf("%s\n",hostname );
    return topology_getNodeIDfromname(hostname);
 }
@@ -143,7 +145,7 @@ int topology_getNodeNum()
 			int secondNodeId = topology_getNodeIDfromname(secondHost);
 			//printf("firstNodeId = %d, secondNodeId = %d \n", firstNodeId, secondNodeId );
 			if(size == 0){
-				nodesFound = realloc(nodesFound,sizeof(int));
+				nodesFound = malloc(sizeof(int));
 				nodesFound[size++] = firstNodeId;
 			}else if(is_node_exists(firstNodeId,nodesFound,size) == 0){ // new node is found
 				//printf("first node not found %d \n", firstNodeId);
@@ -159,6 +161,7 @@ int topology_getNodeNum()
 			}
 
 		}
+		free(nodesFound);
 		fclose(topologyFile);
   }
   return size;
@@ -180,7 +183,7 @@ int* topology_getNodeArray()
 			int secondNodeId = topology_getNodeIDfromname(secondHost);
 			//printf("firstNodeId = %d, secondNodeId = %d \n", firstNodeId, secondNodeId );
 			if(size == 0){
-				nodesFound = realloc(nodesFound,sizeof(int));
+				nodesFound = (int *)malloc(sizeof(int));
 				nodesFound[size++] = firstNodeId;
 			}else if(is_node_exists(firstNodeId,nodesFound,size) == 0){ // new node is found
 				//printf("first node not found %d \n", firstNodeId);
@@ -209,19 +212,24 @@ int* topology_getNbrArray()
 	int size = 0;
 	int myNodeId = topology_getMyNodeID();
 	FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
+	//printf("topology_getNbrArray strted\n");
 	if(topologyFile != NULL){
+		//printf("topology file valid\n");
 		char line[120];
 		while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 			char *firstHost = strtok(line, " ");
 			char *secondHost = strtok(NULL, " ");
+			//printf("firstNode= %s, secondNode = %s \n", firstHost, secondHost);
 			int firstNodeId = topology_getNodeIDfromname(firstHost);
 			int secondNodeId = topology_getNodeIDfromname(secondHost);
 			if(myNodeId == firstNodeId || myNodeId == secondNodeId ){
-			//printf("firstNodeId = %d, secondNodeId = %d \n", firstNodeId, secondNodeId );
+				//printf("firstNodeId = %d, secondNodeId = %d \n", firstNodeId, secondNodeId );
 				int neighbourId = (firstNodeId == myNodeId) ? secondNodeId : firstNodeId;
 				//printf("Neighbour found  neighbourid = %d \n", neighbourId);
 				if(size == 0){
-					nodesFound = realloc(nodesFound,sizeof(int));
+					//printf("size 0\n");
+					nodesFound = (int *)malloc(sizeof(int));
+					//printf("allocated\n");
 					nodesFound[size++] = neighbourId;
 				}else if(is_node_exists(neighbourId,nodesFound,size) == 0){ // new node is found
 					nodesFound = realloc(nodesFound,(size + 1) * sizeof(int));
@@ -242,7 +250,7 @@ int* topology_getNbrArray()
 unsigned int topology_getCost(int fromNodeID, int toNodeID)
 {
   int myNodeId = topology_getMyNodeID();
-  int cost = INFINITE_COST ;
+  int cost = (fromNodeID == toNodeID) ? 0 : INFINITE_COST ;
   if(myNodeId >= 0 ){
   		FILE *topologyFile = fopen(TOPOLOGY_FILE_NAME, "r");
 		if(topologyFile != NULL){
@@ -250,6 +258,7 @@ unsigned int topology_getCost(int fromNodeID, int toNodeID)
 			while(fgets(line, sizeof(line), (FILE*)topologyFile) != NULL){
 				char *firstHost = strtok(line, " ");
 				char *secondHost = strtok(NULL, " ");
+				//printf("first = %s, second = %s  \n", firstHost, secondHost );
 				int firstNodeId = topology_getNodeIDfromname(firstHost);
 				int secondNodeId = topology_getNodeIDfromname(secondHost);
 				if((firstNodeId == fromNodeID && secondNodeId == toNodeID) || (secondNodeId == fromNodeID && firstNodeId == toNodeID)){
@@ -278,8 +287,8 @@ int main1(){
 	for(int i = 0 ; i < totalNeighbours ; i++){
 		printf("node = %d \n", neighBourNodes[i] );
 	}
-	printf(" distance between 1 and 100  = %d\n",topology_getCost(1,100));
-	printf(" distance between 1 and 87  = %d\n",topology_getCost(1,87));	
-	printf(" distance between 1 and 160  = %d\n",topology_getCost(1,160));
+	printf(" distance between 1 and 213  = %d\n",topology_getCost(1,213));
+	printf(" distance between 1 and 97  = %d\n",topology_getCost(1,212));	
+	printf(" distance between 1 and 212  = %d\n",topology_getCost(1,97));
 	return 0;
 }

@@ -49,4 +49,5 @@ unsigned int topology_getCost(int fromNodeID, int toNodeID);
 
 // returns ip address from hostname
 void get_ip_from_host_name(char* hostname, in_addr_t *ip);
+int main1();
 #endif

@@ -1,17 +1,12 @@
-Assignment 2:
-Building A Mini Web Server
-The goal of this lab is for you to get familiar with the basic principle of web server and gain first-hand experiences of actually building one! -- a simplified mini version though ;-) Specifically you will design and implement a simple web server to serve static content to clients using real web browsers such as Chrome and Firefox. It combines process control, Unix I/O, the sockets interface, etc., in just 600 lines of code.
+A Mini Web Server
+
+The goal of this project was to get familiar with the basic principles of web server and gain first-hand experiences of actually building one! -- a simplified mini version though ;-) This is a simple web server implemented inc to serve static content to clients using real web browsers such as Chrome and Firefox. It combines process control, Unix I/O, the sockets interface, etc., in around 600 lines of code.
 
 Design Overview
 
-Our mini web sever can display files in a specified directory, where the client can open/download these files. Additionally, the web server also tracks client visit history and client information (web servers in the real world do that all the time, whether you like it or not). It will display the 10 most recent visits on the webpage, listing the IP address and the browser (e.g., Safari, Chrome, IE and Firefox) for each of these 10 visits. To get a better idea on how the web page looks like, here is a demo page.
+This mini web sever can display files in a specified directory, where the client can open/download these files. Additionally, the web server also tracks client visit history and client information (web servers in the real world do that all the time, whether you like it or not). It will display the 10 most recent visits on the webpage, listing the IP address and the browser (e.g., Safari, Chrome, IE and Firefox) for each of these 10 visits. To get a better idea on how the web page looks like, here is a demo page.
 
-Your task in this lab is to write a C program (file_browser.c) to provide this simple web server functionality. Specifically, your program allows a web page provider to specify a file directory and a port number X. Then your program will enable anyone visiting http://moose.cs.dartmouth.edu:X to see the list of files in the specified directory, as well as the visit statistics.
-
-Figure 1 shows the workflow of your code. We will go over the task of each main component.
-
-
-Figure 1: Main design of assignment 2
+Following are few design details :- 
 
 The input checking function
 
@@ -19,7 +14,7 @@ Before launching the server, it needs to check proper user input arguments such 
 
 The open_listenfd function
 
-It is helper function to wrap the socket and connect functions. First, you need to use the socket function to create a socket descriptor "sockfd". The bind function tells the kernel to associate the server's socket address with the socket descriptor "sockfd". The listen function converts "sockfd" from an active socket to a listening socket that can accept connection requests from clients. The second argument for the listen function is a hint about the number of outstanding connection requests that the kernel should queue up before it starts to refuse requests. We will typically set it to a large value, such as 9999.
+It is helper function to wrap the socket and connect functions. First it uses the socket function to create a socket descriptor "sockfd". The bind function tells the kernel to associate the server's socket address with the socket descriptor "sockfd". The listen function converts "sockfd" from an active socket to a listening socket that can accept connection requests from clients. The second argument for the listen function is a hint about the number of outstanding connection requests that the kernel should queue up before it starts to refuse requests. We will typically set it to a large value, such as 9999.
 
 The process function
 
